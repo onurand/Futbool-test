@@ -20,13 +20,29 @@ Backend, MCP servers, and frontend are placeholders at this phase. See `ARCHITEC
 ## Layout
 
 ```
-backend/        FastAPI app (auth, chat, billing, admin)
+backend/        FastAPI app (auth, chat, billing, admin, providers)
 agents/         Agent registry (John, Carlos, ...)
 prompts/        Per-agent system prompts
 mcp_servers/    football-core, odds-intel, analysis-brain
 tools/          Claude tool JSON schemas (6 tools)
+supabase/       DB migrations + seeds
+web/            Next.js 15 + Tailwind v4 web app (Claude-style UI)
 docs/           Additional design docs
 scripts/        Dev/ops scripts
+```
+
+## Run the stack locally
+
+```bash
+cp .env.example .env                # fill secrets (never commit)
+docker compose up -d                # postgres + redis
+pip install -e .[dev]               # or: uv pip install
+uvicorn backend.main:app --reload   # backend at :8000
+
+cd web
+cp .env.local.example .env.local    # fill with Supabase + API base URL
+npm install
+npm run dev                         # web at :3000
 ```
 
 ---
