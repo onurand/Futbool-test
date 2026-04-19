@@ -1,12 +1,12 @@
-"""odds-intel MCP server entry point.
+"""odds-intel MCP server.
 
-Phase 1: handlers delegate to mock providers. Swap in live The Odds API client later.
+Uses the live The Odds API client when configured; otherwise mock.
 """
 
 from __future__ import annotations
 
 from backend.core.config import get_settings
-from backend.providers import mock_odds
+from backend.providers import mock_odds, the_odds_api
 
 
 async def get_market_odds_consensus(
@@ -14,12 +14,14 @@ async def get_market_odds_consensus(
     market: str,
     bookmaker_filter: list[str] | None = None,
 ) -> dict:
-    if get_settings().use_mock_providers:
+    s = get_settings()
+    if s.use_mock_providers or not s.the_odds_api_key:
         return await mock_odds.get_market_odds_consensus(fixture_id, market, bookmaker_filter)
-    return {"data_missing": True, "reason": "live Odds API client not yet implemented"}
+    return await the_odds_api.get_market_odds_consensus(fixture_id, market, bookmaker_filter)
 
 
 async def get_market_movement(fixture_id: str, market: str) -> dict:
-    if get_settings().use_mock_providers:
+    s = get_settings()
+    if s.use_mock_providers or not s.the_odds_api_key:
         return await mock_odds.get_market_movement(fixture_id, market)
-    return {"data_missing": True, "reason": "live Odds API client not yet implemented"}
+    return await the_odds_api.get_market_movement(fixture_id, market)
