@@ -61,6 +61,38 @@ export async function sendChat(
   return res.json();
 }
 
+// -------------------- Voice --------------------
+
+export type VoiceResponse = {
+  transcript: string;
+  text: string;
+  tool_calls: ToolCall[];
+  audio_b64: string | null;
+  tokens_charged: number;
+  tokens_balance: number;
+};
+
+export async function sendVoice(
+  agent: AgentCode,
+  audio: Blob,
+  language?: string
+): Promise<VoiceResponse> {
+  const form = new FormData();
+  form.append("audio", audio, "clip.webm");
+  form.append("agent_code", agent);
+  if (language) form.append("language", language);
+  const res = await fetch(`${API_BASE}/v1/chat/voice`, {
+    method: "POST",
+    headers: { ...(await authHeader()) }, // let the browser set multipart boundary
+    body: form,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`voice failed (${res.status}): ${text}`);
+  }
+  return res.json();
+}
+
 // -------------------- Matches --------------------
 
 export type ApiTeam = { id: string; name: string; short?: string };

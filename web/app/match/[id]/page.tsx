@@ -8,6 +8,7 @@ import { AskJohnBar, JohnTake } from "@/components/john-take";
 import { MatchHero } from "@/components/match-hero";
 import { ModeToggle, type ChatMode } from "@/components/mode-toggle";
 import { OddsPanel } from "@/components/odds-panel";
+import { VoiceButton } from "@/components/voice-button";
 import { getMatch } from "@/lib/matches";
 import { useI18n } from "@/lib/i18n/context";
 
@@ -43,6 +44,10 @@ export default function MatchAnalysisPage() {
       </div>
 
       <div className="mt-4">
+        <VoiceButton agent="john" />
+      </div>
+
+      <div className="mt-3">
         <AskJohnBar mode={mode} />
       </div>
     </main>

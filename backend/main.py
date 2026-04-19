@@ -14,6 +14,7 @@ from backend.admin.routes import router as admin_router
 from backend.auth.routes import router as auth_router
 from backend.billing.routes import router as billing_router
 from backend.chat.routes import router as chat_router
+from backend.chat.voice import router as voice_router
 from backend.core.config import get_settings
 from backend.matches.routes import router as matches_router
 
@@ -31,6 +32,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(matches_router)
 app.include_router(chat_router)
+app.include_router(voice_router)
 app.include_router(billing_router)
 app.include_router(admin_router)
 

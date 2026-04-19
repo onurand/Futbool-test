@@ -52,6 +52,14 @@ class Settings(BaseSettings):
     the_odds_api_key: str = Field(default="")
     football_data_org_key: str = Field(default="")
 
+    # Voice (push-to-talk)
+    openai_api_key: str = ""
+    elevenlabs_api_key: str = ""
+    elevenlabs_voice_john: str = ""
+    elevenlabs_voice_carlos: str = ""
+    elevenlabs_voice_hans: str = ""
+    elevenlabs_voice_emre: str = ""
+
     # Feature flags
     use_mock_providers: bool = True  # flip to False once real API keys are live.
 

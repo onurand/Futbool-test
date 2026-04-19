@@ -104,6 +104,14 @@ export const DICT = {
   admin_note:           { tr: "Not (opsiyonel)", en: "Note (optional)" },
   admin_save:           { tr: "Kaydet",       en: "Save" },
   admin_cancel:         { tr: "İptal",        en: "Cancel" },
+
+  // Voice
+  voice_hold:       { tr: "Basılı tut — konuş", en: "Hold to talk" },
+  voice_recording:  { tr: "Dinliyorum…",         en: "Listening…" },
+  voice_thinking:   { tr: "John düşünüyor…",     en: "John is thinking…" },
+  voice_no_mic:     { tr: "Mikrofona erişilemiyor.", en: "Microphone not available." },
+  voice_cost:       { tr: "3 jeton · ses ile",   en: "3 tokens · voice" },
+  voice_replay:     { tr: "Tekrar oynat",        en: "Replay" },
 } as const;
 
 export type DictKey = keyof typeof DICT;

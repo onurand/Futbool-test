@@ -19,6 +19,7 @@ class SpendReason(str, Enum):
     FAST_PUNDIT = "fast_pundit"
     SHARP_ANALYSIS = "sharp_analysis"
     MARKET_MOVEMENT = "market_movement"
+    VOICE_ROUND_TRIP = "voice_round_trip"
 
 
 class GrantReason(str, Enum):
@@ -32,6 +33,7 @@ COSTS: dict[SpendReason, int] = {
     SpendReason.FAST_PUNDIT: 1,
     SpendReason.SHARP_ANALYSIS: 5,
     SpendReason.MARKET_MOVEMENT: 3,
+    SpendReason.VOICE_ROUND_TRIP: 3,  # STT + chat + TTS in one round-trip
 }
 
 
