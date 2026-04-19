@@ -1,492 +1,476 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="tr" class="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="color-scheme" content="dark" />
-  <title>Futbool — UI preview</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <title>Futbool</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['Inter', 'ui-sans-serif', 'system-ui'],
-            mono: ['JetBrains Mono', 'ui-monospace'],
-          },
-          colors: {
-            bg: 'oklch(0.15 0.005 260)',
-            surface: 'oklch(0.19 0.006 260)',
-            surface2: 'oklch(0.23 0.008 260)',
-            border: 'oklch(0.30 0.008 260)',
-            borderSubtle: 'oklch(0.25 0.006 260)',
-            fg: 'oklch(0.96 0.01 260)',
-            fgMuted: 'oklch(0.72 0.01 260)',
-            fgSubtle: 'oklch(0.55 0.01 260)',
-            accent: 'oklch(0.62 0.18 255)',
-            success: 'oklch(0.72 0.17 155)',
-            warning: 'oklch(0.80 0.16 75)',
-            danger:  'oklch(0.65 0.22 25)',
-          },
+      theme: { extend: {
+        fontFamily: { sans: ['Inter','system-ui','sans-serif'] },
+        colors: {
+          bg:       'oklch(0.16 0.015 155)',
+          surface:  'oklch(0.21 0.020 155)',
+          surface2: 'oklch(0.26 0.024 155)',
+          border:   'oklch(0.34 0.025 155)',
+          fg:       'oklch(0.97 0.01 155)',
+          fgMuted:  'oklch(0.72 0.012 155)',
+          fgSubtle: 'oklch(0.52 0.012 155)',
+          pitch:    'oklch(0.78 0.19 142)',
+          live:     'oklch(0.68 0.24 25)',
+          gold:     'oklch(0.82 0.16 85)',
         },
-      },
+      }},
     };
   </script>
   <style>
-    html, body { background: oklch(0.15 0.005 260); color: oklch(0.96 0.01 260); }
-    body { font-family: Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
-    ::selection { background: color-mix(in oklch, oklch(0.62 0.18 255) 45%, transparent); }
-    .grid-dots {
-      background-image: radial-gradient(color-mix(in oklch, white 10%, transparent) 1px, transparent 1px);
-      background-size: 28px 28px;
+    html,body{background:oklch(0.16 0.015 155);color:oklch(0.97 0.01 155);font-family:Inter,system-ui,sans-serif;}
+    ::-webkit-scrollbar{width:0;height:0;}
+    .shine{background:linear-gradient(135deg,oklch(0.78 0.19 142) 0%,oklch(0.62 0.17 142) 100%);}
+    .pitchLines{
+      background-image:
+        linear-gradient(90deg, transparent 49.6%, oklch(1 0 0 / .06) 49.6%, oklch(1 0 0 / .06) 50.4%, transparent 50.4%),
+        radial-gradient(circle at 50% 50%, transparent 40px, oklch(1 0 0 / .06) 40px, oklch(1 0 0 / .06) 41px, transparent 41px);
     }
-    .glow-accent {
-      box-shadow: 0 0 0 1px color-mix(in oklch, oklch(0.62 0.18 255) 45%, transparent),
-                  0 10px 40px -10px color-mix(in oklch, oklch(0.62 0.18 255) 35%, transparent);
-    }
-    .tab-active { background: oklch(0.23 0.008 260); color: oklch(0.96 0.01 260); }
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-thumb { background: oklch(0.30 0.008 260); border-radius: 999px; }
+    .crest{display:inline-flex;align-items:center;justify-content:center;font-weight:800;letter-spacing:-0.02em;}
   </style>
 </head>
 <body class="min-h-dvh">
 
-<!-- Preview top bar -->
-<div class="sticky top-0 z-40 border-b border-borderSubtle bg-bg/80 backdrop-blur">
-  <div class="mx-auto flex max-w-5xl items-center justify-between px-4 py-2">
+<header class="sticky top-0 z-40 border-b border-border/60 bg-bg/90 backdrop-blur">
+  <div class="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
     <div class="flex items-center gap-2">
-      <span class="inline-flex h-6 w-6 items-center justify-center rounded-md bg-accent text-white text-[10px] font-bold">F</span>
-      <span class="text-xs font-semibold tracking-tight">Futbool · UI preview</span>
+      <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg shine text-bg text-sm font-extrabold">F</span>
+      <div class="leading-tight">
+        <div class="text-sm font-semibold tracking-tight">Futbool</div>
+        <div class="text-[10px] text-fgSubtle" data-tr="Akıllı futbol analizi" data-en="Smart football analysis">Akıllı futbol analizi</div>
+      </div>
     </div>
-    <div class="flex rounded-md border border-borderSubtle p-0.5 text-[11px]">
-      <button data-tab="chat" class="tab-btn tab-active rounded px-2.5 py-1">Chat</button>
-      <button data-tab="landing" class="tab-btn rounded px-2.5 py-1 text-fgMuted">Landing</button>
-      <button data-tab="pricing" class="tab-btn rounded px-2.5 py-1 text-fgMuted">Pricing</button>
+    <div class="flex items-center gap-1 rounded-full border border-border p-0.5 text-[11px] font-medium">
+      <button id="lang-tr" class="rounded-full bg-surface2 px-2.5 py-1">TR</button>
+      <button id="lang-en" class="rounded-full px-2.5 py-1 text-fgMuted">EN</button>
     </div>
   </div>
-</div>
+</header>
 
-<!-- =============== CHAT =============== -->
-<section id="panel-chat" class="tab-panel mx-auto max-w-5xl">
-  <div class="grid min-h-[85dvh] grid-cols-1 md:grid-cols-[260px_1fr]">
-    <!-- Sidebar (hidden on mobile, toggle via button) -->
-    <aside id="sidebar" class="hidden border-r border-borderSubtle bg-surface/60 md:flex md:flex-col">
-      <div class="flex items-center gap-2 border-b border-borderSubtle px-5 py-4">
-        <span class="inline-flex h-7 w-7 items-center justify-center rounded-md bg-accent text-white text-xs font-bold">F</span>
-        <span class="text-sm font-semibold tracking-tight">Futbool</span>
-      </div>
-      <div class="flex-1 overflow-y-auto p-4">
-        <div class="mb-2 px-2 text-[11px] font-medium uppercase tracking-wider text-fgSubtle">Agents</div>
-        <div class="space-y-1">
-          <button class="flex w-full items-center gap-3 rounded-md bg-surface2 px-2 py-2 text-left text-sm text-fg">
-            <span class="text-base">🏴</span>
-            <span class="flex-1">
-              <div>John</div>
-              <div class="text-[11px] text-fgSubtle">Premier · Championship</div>
-            </span>
-          </button>
-          <button class="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left text-sm text-fgSubtle">
-            <span class="text-base">🇪🇸</span>
-            <span class="flex-1">
-              <div class="flex items-center gap-2">Carlos
-                <span class="rounded-full border border-borderSubtle bg-surface px-2 py-0.5 text-[10px] text-fgMuted">soon</span>
-              </div>
-              <div class="text-[11px] text-fgSubtle">La Liga</div>
-            </span>
-          </button>
-          <button class="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left text-sm text-fgSubtle">
-            <span class="text-base">🇩🇪</span>
-            <span class="flex-1">
-              <div class="flex items-center gap-2">Hans
-                <span class="rounded-full border border-borderSubtle bg-surface px-2 py-0.5 text-[10px] text-fgMuted">soon</span>
-              </div>
-              <div class="text-[11px] text-fgSubtle">Bundesliga</div>
-            </span>
-          </button>
-          <button class="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left text-sm text-fgSubtle">
-            <span class="text-base">🇹🇷</span>
-            <span class="flex-1">
-              <div class="flex items-center gap-2">Emre
-                <span class="rounded-full border border-borderSubtle bg-surface px-2 py-0.5 text-[10px] text-fgMuted">soon</span>
-              </div>
-              <div class="text-[11px] text-fgSubtle">Süper Lig</div>
-            </span>
-          </button>
-        </div>
-
-        <div class="mt-8 mb-2 px-2 text-[11px] font-medium uppercase tracking-wider text-fgSubtle">Suggested</div>
-        <div class="space-y-1 text-[13px] text-fgMuted">
-          <div class="rounded-md px-2 py-1.5 hover:bg-surface2">Manu - Leeds tonight: market consensus and the most likely surprise?</div>
-          <div class="rounded-md px-2 py-1.5 hover:bg-surface2">Is Manchester United's home favourite status justified by form?</div>
-          <div class="rounded-md px-2 py-1.5 hover:bg-surface2">Walk me through bookmaker odds for the demo fixture.</div>
-        </div>
-      </div>
-      <div class="border-t border-borderSubtle p-3 text-xs">
-        <div class="flex items-center gap-2 rounded-md bg-surface2 px-2 py-2 text-fgMuted">
-          <span>👤</span><span class="truncate">you@example.com</span>
-        </div>
-      </div>
-    </aside>
-
-    <!-- Main chat area -->
-    <section class="flex min-h-[85dvh] flex-col">
-      <header class="sticky top-[42px] z-10 flex items-center justify-between border-b border-borderSubtle bg-bg/70 px-4 py-3 backdrop-blur md:px-6">
-        <div class="flex items-center gap-3">
-          <button id="mobileMenu" class="md:hidden text-fgMuted">☰</button>
-          <span class="h-4 w-4 rounded-sm bg-accent/30 border border-accent/60"></span>
-          <span class="text-sm font-medium tracking-tight">John</span>
-          <span class="rounded-full border border-borderSubtle bg-surface2 px-2 py-0.5 text-[11px] text-fgMuted">Premier · Championship</span>
-        </div>
-        <div class="flex items-center gap-2">
-          <span class="rounded-full border border-accent/40 bg-accent/20 px-2 py-0.5 text-[11px] text-accent">mock mode</span>
-        </div>
-      </header>
-
-      <div class="flex-1 overflow-y-auto">
-        <div class="mx-auto max-w-3xl px-4 py-6 md:px-6 md:py-8">
-
-          <!-- User turn -->
-          <div class="mb-6 flex justify-end">
-            <div class="max-w-[85%] rounded-2xl rounded-br-md bg-surface2 px-4 py-3 text-[15px] leading-relaxed text-fg">
-              Bu akşam Manu Leeds maçı var. Global bookmaker'lardan oran ortalaması ne ve sürpriz olursa ne olur?
-            </div>
-          </div>
-
-          <!-- Assistant turn -->
-          <div class="mb-2 flex items-center gap-2 text-xs text-fgSubtle">
-            <span class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-white">J</span>
-            <span>john</span><span>·</span><span>827 model tokens</span>
-          </div>
-
-          <!-- Tool calls -->
-          <div class="mb-4 space-y-1.5">
-            <details class="rounded-lg border border-borderSubtle bg-surface2/60">
-              <summary class="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs">
-                <span class="text-fgSubtle">▸</span>
-                <span class="text-accent">🔧</span>
-                <span class="font-mono text-[11px]">resolve_match_query</span>
-                <span class="ml-auto font-mono text-fgSubtle">source: mock</span>
-              </summary>
-              <div class="border-t border-borderSubtle px-3 py-2">
-                <pre class="overflow-x-auto rounded bg-bg p-2 font-mono text-[11px] leading-relaxed text-fgMuted">{ "team_query_1": "Manu", "team_query_2": "Leeds", "date_hint": "tonight" }</pre>
-              </div>
-            </details>
-
-            <details open class="rounded-lg border border-borderSubtle bg-surface2/60">
-              <summary class="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs">
-                <span class="text-fgSubtle">▾</span>
-                <span class="text-accent">🔧</span>
-                <span class="font-mono text-[11px]">get_market_odds_consensus</span>
-                <span class="ml-auto font-mono text-fgSubtle">source: mock</span>
-              </summary>
-              <div class="border-t border-borderSubtle px-3 py-2">
-                <pre class="overflow-x-auto rounded bg-bg p-2 font-mono text-[11px] leading-relaxed text-fgMuted">{
-  "market": "h2h",
-  "bookmakers_used": 12,
-  "snapshot_time_utc": "2026-04-19T17:02:00Z",
-  "home": { "mean_odds": 1.73, "median_odds": 1.73, "fair_probability": 0.551 },
-  "draw": { "mean_odds": 3.87, "median_odds": 3.90, "fair_probability": 0.245 },
-  "away": { "mean_odds": 4.95, "median_odds": 5.00, "fair_probability": 0.204 }
-}</pre>
-              </div>
-            </details>
-
-            <details class="rounded-lg border border-borderSubtle bg-surface2/60">
-              <summary class="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs">
-                <span class="text-fgSubtle">▸</span>
-                <span class="text-accent">🔧</span>
-                <span class="font-mono text-[11px]">get_team_form</span>
-                <span class="ml-auto font-mono text-fgSubtle">source: mock</span>
-              </summary>
-            </details>
-
-            <details class="rounded-lg border border-borderSubtle bg-surface2/60">
-              <summary class="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs">
-                <span class="text-fgSubtle">▸</span>
-                <span class="text-accent">🔧</span>
-                <span class="font-mono text-[11px]">get_player_availability</span>
-                <span class="ml-auto font-mono text-fgSubtle">source: mock</span>
-              </summary>
-            </details>
-
-            <details class="rounded-lg border border-borderSubtle bg-surface2/60">
-              <summary class="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs">
-                <span class="text-fgSubtle">▸</span>
-                <span class="text-accent">🔧</span>
-                <span class="font-mono text-[11px]">get_prediction_snapshot</span>
-                <span class="ml-auto font-mono text-fgSubtle">source: mock</span>
-              </summary>
-            </details>
-          </div>
-
-          <!-- Structured John answer -->
-          <div class="space-y-4">
-            <div>
-              <div class="mb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-fgSubtle">Direct view</div>
-              <div class="text-[15px] leading-relaxed">United are a clear but not crushing home favourite. Market pricing the home win around 55% fair probability. If there&apos;s a surprise tonight, the draw is more likely than a Leeds win.</div>
-            </div>
-            <div>
-              <div class="mb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-fgSubtle">Market read</div>
-              <div class="text-[15px] leading-relaxed">Across <span class="font-mono">12 bookmakers</span> (snapshot <span class="font-mono">17:02 UTC</span>): home mean <span class="font-mono">1.73</span>, draw <span class="font-mono">3.87</span>, away <span class="font-mono">4.95</span>. Vig-clean fair probabilities: <span class="font-mono">55.1% / 24.5% / 20.4%</span>.</div>
-            </div>
-            <div>
-              <div class="mb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-fgSubtle">Why the market leans this way</div>
-              <div class="text-[15px] leading-relaxed">United have won 2 of their last 5 at Old Trafford with a 1.8 goals-for average. Leeds are light away (0W-1D-1L last two) and leak goals (1.6 xG conceded). Bamford doubtful on the Leeds side trims their ceiling further.</div>
-            </div>
-            <div>
-              <div class="mb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-fgSubtle">My angle</div>
-              <div class="text-[15px] leading-relaxed">I&apos;m with the market on the base case. United&apos;s price looks fairly struck — I wouldn&apos;t pay shorter than <span class="font-mono">1.70</span>. Slight lean is that the draw is under-priced if United struggle to break a deep block.</div>
-            </div>
-            <div>
-              <div class="mb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-fgSubtle">If there is a surprise</div>
-              <div class="text-[15px] leading-relaxed">The cleanest upset form is the <strong>draw</strong>, not a Leeds win. United&apos;s recent low-block struggles tilt the surprise toward <span class="font-mono">1-1</span> or <span class="font-mono">2-2</span>, rather than an outright away win which the market (correctly) treats as a longshot.</div>
-            </div>
-            <div>
-              <div class="mb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-fgSubtle">Confidence</div>
-              <div class="flex items-center gap-3">
-                <span class="font-mono text-lg font-medium text-accent">7/10</span>
-                <div class="h-1.5 w-48 overflow-hidden rounded-full bg-surface2">
-                  <div class="h-full rounded-full bg-accent" style="width:70%"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Input -->
-      <div class="border-t border-borderSubtle bg-bg/70 px-4 py-3 md:px-6 md:py-4 backdrop-blur">
-        <div class="mx-auto flex max-w-3xl gap-2">
-          <textarea rows="2" placeholder="Ask John about tonight's fixture, the market, or the most likely surprise…" class="flex-1 resize-none rounded-md border border-border bg-surface2 px-3 py-2 text-sm placeholder:text-fgSubtle focus:outline-none focus:ring-2 focus:ring-accent"></textarea>
-          <button class="h-auto self-stretch rounded-md bg-accent px-4 text-white">↑</button>
-        </div>
-        <p class="mx-auto mt-2 max-w-3xl text-[11px] text-fgSubtle">Enter to send · Shift+Enter for a new line. John will never invent scores or odds.</p>
-      </div>
-    </section>
+<main id="screen-matches" class="screen mx-auto max-w-2xl px-4 pb-24 pt-4">
+  <div class="mb-4 flex items-center justify-between">
+    <div>
+      <div class="text-xs font-medium uppercase tracking-wider text-fgSubtle" data-tr="Bugün" data-en="Today">Bugün</div>
+      <h1 class="mt-0.5 text-xl font-semibold tracking-tight" data-tr="İngiltere maçları" data-en="England fixtures">İngiltere maçları</h1>
+    </div>
+    <div class="flex items-center gap-1 rounded-full bg-surface2 px-2.5 py-1 text-[11px] text-fgMuted">
+      <span class="inline-block h-1.5 w-1.5 rounded-full bg-pitch"></span>
+      <span data-tr="Canlı oran" data-en="Live odds">Canlı oran</span>
+    </div>
   </div>
-</section>
 
-<!-- =============== LANDING =============== -->
-<section id="panel-landing" class="tab-panel hidden">
-  <div class="relative isolate">
-    <div class="pointer-events-none absolute inset-0 -z-10 grid-dots opacity-40"></div>
-
-    <header class="sticky top-[42px] z-20 border-b border-borderSubtle bg-bg/80 backdrop-blur">
-      <div class="mx-auto flex h-14 max-w-5xl items-center justify-between px-4 md:px-6">
-        <div class="flex items-center gap-2">
-          <span class="inline-flex h-7 w-7 items-center justify-center rounded-md bg-accent text-white text-xs font-bold">F</span>
-          <span class="text-sm font-semibold tracking-tight">Futbool</span>
+  <button onclick="showScreen('analysis')" class="relative block w-full overflow-hidden rounded-2xl border border-border bg-surface text-left transition hover:border-pitch/60">
+    <div class="pitchLines absolute inset-0 opacity-20"></div>
+    <div class="relative p-4">
+      <div class="mb-3 flex items-center justify-between text-[11px]">
+        <div class="flex items-center gap-2 text-fgMuted">
+          <span class="inline-flex items-center gap-1 rounded-full bg-surface2 px-2 py-0.5">
+            <span class="inline-block h-1.5 w-1.5 rounded-full bg-gold"></span>
+            Premier League
+          </span>
+          <span>·</span>
+          <span>Old Trafford</span>
         </div>
-        <nav class="flex items-center gap-1 text-sm">
-          <span class="px-3 py-1.5 text-fgMuted">Chat</span>
-          <span class="px-3 py-1.5 text-fgMuted">Pricing</span>
-          <button class="rounded-md px-3 py-1.5 text-fgMuted">Log in</button>
-          <button class="rounded-md bg-accent px-3 py-1.5 text-white">Sign up</button>
-        </nav>
+        <span class="rounded-full border border-pitch/40 bg-pitch/15 px-2 py-0.5 font-semibold text-pitch">21:00</span>
       </div>
-    </header>
+      <div class="flex items-center justify-between gap-4">
+        <div class="flex flex-1 items-center gap-3">
+          <span class="crest h-12 w-12 rounded-xl bg-[#DA291C] text-white">MU</span>
+          <div>
+            <div class="font-semibold leading-tight">Manchester United</div>
+            <div class="text-[11px] text-fgSubtle" data-tr="Ev sahibi" data-en="Home">Ev sahibi</div>
+          </div>
+        </div>
+        <span class="text-fgSubtle text-sm">vs</span>
+        <div class="flex flex-1 items-center justify-end gap-3">
+          <div class="text-right">
+            <div class="font-semibold leading-tight">Leeds United</div>
+            <div class="text-[11px] text-fgSubtle" data-tr="Deplasman" data-en="Away">Deplasman</div>
+          </div>
+          <span class="crest h-12 w-12 rounded-xl bg-[#FFCD00] text-[#1D428A]">LU</span>
+        </div>
+      </div>
+      <div class="mt-4 grid grid-cols-3 gap-2">
+        <div class="rounded-xl bg-surface2 py-2.5 text-center">
+          <div class="text-[10px] uppercase tracking-wider text-fgSubtle" data-tr="Ev" data-en="Home">Ev</div>
+          <div class="mt-0.5 text-lg font-semibold">1.73</div>
+        </div>
+        <div class="rounded-xl bg-surface2 py-2.5 text-center">
+          <div class="text-[10px] uppercase tracking-wider text-fgSubtle" data-tr="Beraberlik" data-en="Draw">Beraberlik</div>
+          <div class="mt-0.5 text-lg font-semibold">3.87</div>
+        </div>
+        <div class="rounded-xl bg-surface2 py-2.5 text-center">
+          <div class="text-[10px] uppercase tracking-wider text-fgSubtle" data-tr="Deplasman" data-en="Away">Deplasman</div>
+          <div class="mt-0.5 text-lg font-semibold">4.95</div>
+        </div>
+      </div>
+      <div class="mt-3 flex items-center justify-between rounded-xl border border-pitch/25 bg-pitch/10 px-3 py-2 text-[12px]">
+        <div class="flex items-center gap-2">
+          <span class="crest h-6 w-6 rounded-full shine text-bg text-[11px]">J</span>
+          <span><span data-tr="John'un görüşü hazır" data-en="John's take is ready">John'un görüşü hazır</span></span>
+        </div>
+        <span class="font-semibold text-pitch" data-tr="Oku →" data-en="Read →">Oku →</span>
+      </div>
+    </div>
+  </button>
 
-    <div class="mx-auto max-w-5xl px-4 md:px-6">
-      <div class="py-16 md:py-24">
-        <span class="inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent/20 px-2.5 py-1 text-xs text-accent">
-          <span class="h-1.5 w-1.5 rounded-full bg-accent"></span> Phase 1 · John is live in mock mode
+  <div class="mt-5 mb-2 flex items-center justify-between">
+    <h2 class="text-sm font-medium text-fgMuted" data-tr="Diğer maçlar" data-en="Other fixtures">Diğer maçlar</h2>
+    <span class="text-[11px] text-fgSubtle" data-tr="Championship dahil" data-en="incl. Championship">Championship dahil</span>
+  </div>
+
+  <div class="space-y-2">
+    <div class="flex items-center gap-3 rounded-xl border border-border bg-surface px-3 py-3">
+      <div class="w-10 shrink-0 text-center">
+        <div class="text-sm font-semibold text-pitch">19:30</div>
+        <div class="text-[10px] text-fgSubtle">PL</div>
+      </div>
+      <div class="flex flex-1 items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <span class="crest h-7 w-7 rounded-md bg-[#034694] text-white text-[11px]">CHE</span>
+          <span class="text-sm">Chelsea</span>
+        </div>
+        <span class="text-xs text-fgSubtle">—</span>
+        <div class="flex items-center gap-2">
+          <span class="text-sm">Tottenham</span>
+          <span class="crest h-7 w-7 rounded-md bg-white text-[#132257] text-[11px]">TOT</span>
+        </div>
+      </div>
+      <div class="text-[11px] text-fgMuted">1.95</div>
+    </div>
+
+    <div class="flex items-center gap-3 rounded-xl border border-border bg-surface px-3 py-3">
+      <div class="w-10 shrink-0 text-center">
+        <div class="text-sm font-semibold text-pitch">20:00</div>
+        <div class="text-[10px] text-fgSubtle">CHP</div>
+      </div>
+      <div class="flex flex-1 items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <span class="crest h-7 w-7 rounded-md bg-[#E03A3E] text-white text-[11px]">SUN</span>
+          <span class="text-sm">Sunderland</span>
+        </div>
+        <span class="text-xs text-fgSubtle">—</span>
+        <div class="flex items-center gap-2">
+          <span class="text-sm">Norwich</span>
+          <span class="crest h-7 w-7 rounded-md bg-[#FFF200] text-[#00A650] text-[11px]">NOR</span>
+        </div>
+      </div>
+      <div class="text-[11px] text-fgMuted">2.10</div>
+    </div>
+
+    <div class="flex items-center gap-3 rounded-xl border border-border bg-surface px-3 py-3">
+      <div class="w-10 shrink-0 text-center">
+        <div class="flex items-center justify-center gap-1">
+          <span class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-live"></span>
+          <span class="text-[11px] font-semibold text-live">69&apos;</span>
+        </div>
+        <div class="text-[10px] text-fgSubtle">PL</div>
+      </div>
+      <div class="flex flex-1 items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <span class="crest h-7 w-7 rounded-md bg-[#C8102E] text-white text-[11px]">LIV</span>
+          <span class="text-sm">Liverpool</span>
+        </div>
+        <span class="text-sm font-semibold tracking-wider">2 — 1</span>
+        <div class="flex items-center gap-2">
+          <span class="text-sm">Arsenal</span>
+          <span class="crest h-7 w-7 rounded-md bg-[#EF0107] text-white text-[11px]">ARS</span>
+        </div>
+      </div>
+      <span class="rounded-full bg-live/15 px-2 py-0.5 text-[10px] font-semibold text-live">LIVE</span>
+    </div>
+  </div>
+</main>
+
+<main id="screen-analysis" class="screen hidden mx-auto max-w-2xl px-4 pb-24 pt-4">
+  <button onclick="showScreen('matches')" class="mb-3 flex items-center gap-1 text-sm text-fgMuted">
+    <span>←</span><span data-tr="Maçlara dön" data-en="Back to matches">Maçlara dön</span>
+  </button>
+
+  <div class="relative overflow-hidden rounded-2xl border border-border bg-surface">
+    <div class="pitchLines absolute inset-0 opacity-15"></div>
+    <div class="relative p-4">
+      <div class="flex items-center justify-between text-[11px] text-fgMuted">
+        <span class="inline-flex items-center gap-1 rounded-full bg-surface2 px-2 py-0.5">
+          <span class="inline-block h-1.5 w-1.5 rounded-full bg-gold"></span>
+          Premier League · <span data-tr="Hafta 34" data-en="Matchweek 34">Hafta 34</span>
         </span>
-        <h1 class="mt-6 text-4xl font-semibold tracking-tight md:text-6xl">
-          Sharp, data-grounded football analysts.<br>
-          <span class="text-fgMuted">Not a chatbot. A pundit that reads the market.</span>
-        </h1>
-        <p class="mt-5 max-w-2xl text-base text-fgMuted md:text-lg">
-          Futbool pairs Claude with live market and fixture data. Ask about tonight&apos;s game — get bookmaker consensus, the most plausible upset path, and an honest confidence score.
+        <span class="rounded-full border border-pitch/40 bg-pitch/15 px-2 py-0.5 font-semibold text-pitch">21:00</span>
+      </div>
+      <div class="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+        <div class="flex flex-col items-center">
+          <span class="crest h-16 w-16 rounded-2xl bg-[#DA291C] text-white text-xl">MU</span>
+          <div class="mt-2 text-center font-semibold leading-tight">Manchester<br/>United</div>
+        </div>
+        <div class="text-center">
+          <div class="text-[10px] uppercase tracking-[0.2em] text-fgSubtle">VS</div>
+          <div class="mt-1 text-[11px] text-fgMuted">Old Trafford</div>
+        </div>
+        <div class="flex flex-col items-center">
+          <span class="crest h-16 w-16 rounded-2xl bg-[#FFCD00] text-[#1D428A] text-xl">LU</span>
+          <div class="mt-2 text-center font-semibold leading-tight">Leeds<br/>United</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-4 rounded-2xl border border-border bg-surface p-4">
+    <div class="mb-3 flex items-center justify-between">
+      <h3 class="text-sm font-semibold" data-tr="Piyasa konsensüsü" data-en="Market consensus">Piyasa konsensüsü</h3>
+      <span class="text-[10px] text-fgSubtle">12 bookmaker · 17:02 UTC</span>
+    </div>
+    <div class="grid grid-cols-3 gap-2">
+      <div class="rounded-xl bg-surface2 p-3 text-center ring-1 ring-pitch/30">
+        <div class="text-[10px] uppercase tracking-wider text-fgSubtle" data-tr="Ev" data-en="Home">Ev</div>
+        <div class="mt-1 text-2xl font-extrabold">1.73</div>
+        <div class="text-[11px] font-semibold text-pitch">%55.1</div>
+      </div>
+      <div class="rounded-xl bg-surface2 p-3 text-center">
+        <div class="text-[10px] uppercase tracking-wider text-fgSubtle" data-tr="Beraberlik" data-en="Draw">Beraberlik</div>
+        <div class="mt-1 text-2xl font-extrabold">3.87</div>
+        <div class="text-[11px] text-fgMuted">%24.5</div>
+      </div>
+      <div class="rounded-xl bg-surface2 p-3 text-center">
+        <div class="text-[10px] uppercase tracking-wider text-fgSubtle" data-tr="Deplasman" data-en="Away">Deplasman</div>
+        <div class="mt-1 text-2xl font-extrabold">4.95</div>
+        <div class="text-[11px] text-fgMuted">%20.4</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-4 rounded-2xl border border-border bg-surface p-4">
+    <div class="mb-3 flex items-center gap-2">
+      <span class="crest h-8 w-8 rounded-full shine text-bg text-sm">J</span>
+      <div>
+        <div class="text-sm font-semibold">John</div>
+        <div class="text-[11px] text-fgSubtle" data-tr="Premier League uzmanı" data-en="Premier League analyst">Premier League uzmanı</div>
+      </div>
+    </div>
+
+    <div class="space-y-4">
+      <div>
+        <div class="text-[10px] uppercase tracking-[0.14em] text-fgSubtle" data-tr="Doğrudan görüş" data-en="Direct view">Doğrudan görüş</div>
+        <p class="mt-1 text-[15px] leading-relaxed"
+           data-tr="United net favori ama ezici değil. Piyasa ev galibiyetini yaklaşık %55 fiyatlıyor. Sürpriz olursa bu gece Leeds galibiyetinden çok beraberlik beklerim."
+           data-en="United are a clear but not crushing home favourite. Market prices the home win around 55%. If there's a surprise tonight, expect a draw over a Leeds win.">
+          United net favori ama ezici değil. Piyasa ev galibiyetini yaklaşık %55 fiyatlıyor. Sürpriz olursa bu gece Leeds galibiyetinden çok beraberlik beklerim.
         </p>
-        <div class="mt-8 flex flex-wrap gap-2">
-          <button class="rounded-md bg-accent px-5 py-3 text-sm text-white">Create account →</button>
-          <button class="rounded-md border border-border bg-surface2 px-5 py-3 text-sm">Try the chat</button>
-        </div>
       </div>
 
-      <h2 class="text-xs font-medium uppercase tracking-wider text-fgSubtle">Agents</h2>
-      <div class="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <div class="rounded-xl border border-border bg-surface p-5">
-          <div class="flex items-center justify-between">
-            <span class="text-2xl">🏴</span>
-            <span class="rounded-full border border-success/40 bg-success/20 px-2 py-0.5 text-[11px] text-success">active</span>
-          </div>
-          <div class="mt-5 text-lg font-medium">John</div>
-          <div class="text-sm text-fgMuted">Premier League · Championship</div>
-        </div>
-        <div class="rounded-xl border border-border bg-surface p-5">
-          <div class="flex items-center justify-between">
-            <span class="text-2xl">🇪🇸</span>
-            <span class="rounded-full border border-borderSubtle bg-surface2 px-2 py-0.5 text-[11px] text-fgMuted">planned</span>
-          </div>
-          <div class="mt-5 text-lg font-medium">Carlos</div>
-          <div class="text-sm text-fgMuted">La Liga</div>
-        </div>
-        <div class="rounded-xl border border-border bg-surface p-5">
-          <div class="flex items-center justify-between">
-            <span class="text-2xl">🇩🇪</span>
-            <span class="rounded-full border border-borderSubtle bg-surface2 px-2 py-0.5 text-[11px] text-fgMuted">planned</span>
-          </div>
-          <div class="mt-5 text-lg font-medium">Hans</div>
-          <div class="text-sm text-fgMuted">Bundesliga</div>
-        </div>
-        <div class="rounded-xl border border-border bg-surface p-5">
-          <div class="flex items-center justify-between">
-            <span class="text-2xl">🇹🇷</span>
-            <span class="rounded-full border border-borderSubtle bg-surface2 px-2 py-0.5 text-[11px] text-fgMuted">planned</span>
-          </div>
-          <div class="mt-5 text-lg font-medium">Emre</div>
-          <div class="text-sm text-fgMuted">Süper Lig</div>
-        </div>
+      <div>
+        <div class="text-[10px] uppercase tracking-[0.14em] text-fgSubtle" data-tr="Piyasa neden bu yönde" data-en="Why the market leans here">Piyasa neden bu yönde</div>
+        <p class="mt-1 text-[15px] leading-relaxed"
+           data-tr="United Old Trafford'da son 5 maçın 2'sini kazandı, maç başına 1.8 gol. Leeds deplasmanda hafif (son 2'de 0G-1B-1M), xG karşı 1.6. Bamford şüpheli, tavanı düşüyor."
+           data-en="United won 2 of their last 5 at Old Trafford, 1.8 goals/game. Leeds light away (0W-1D-1L last two), 1.6 xG conceded. Bamford doubtful, ceiling trimmed.">
+          United Old Trafford'da son 5 maçın 2'sini kazandı, maç başına 1.8 gol. Leeds deplasmanda hafif (son 2'de 0G-1B-1M), xG karşı 1.6. Bamford şüpheli, tavanı düşüyor.
+        </p>
       </div>
 
-      <h2 class="mt-14 text-xs font-medium uppercase tracking-wider text-fgSubtle">How John reasons</h2>
-      <div class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-        <div class="rounded-xl border border-border bg-surface p-5">
-          <div class="flex items-center gap-3">
-            <span class="flex h-8 w-8 items-center justify-center rounded-md bg-surface2 text-accent">◎</span>
-            <span class="text-base font-medium">Market-first reasoning</span>
-          </div>
-          <p class="mt-3 text-sm text-fgMuted">Bookmaker consensus from 8-20 books, vig-clean fair probabilities, and explicit snapshot timestamps. Never invented.</p>
-        </div>
-        <div class="rounded-xl border border-border bg-surface p-5">
-          <div class="flex items-center gap-3">
-            <span class="flex h-8 w-8 items-center justify-center rounded-md bg-surface2 text-accent">⟂</span>
-            <span class="text-base font-medium">Form + availability context</span>
-          </div>
-          <p class="mt-3 text-sm text-fgMuted">Rolling home/away splits, xG trends, injuries and suspensions folded into every take.</p>
-        </div>
-        <div class="rounded-xl border border-border bg-surface p-5">
-          <div class="flex items-center gap-3">
-            <span class="flex h-8 w-8 items-center justify-center rounded-md bg-surface2 text-accent">✦</span>
-            <span class="text-base font-medium">Upset paths, not hot takes</span>
-          </div>
-          <p class="mt-3 text-sm text-fgMuted">John names the most plausible surprise — and is honest when the surprise is a draw, not an away win.</p>
-        </div>
-        <div class="rounded-xl border border-border bg-surface p-5">
-          <div class="flex items-center gap-3">
-            <span class="flex h-8 w-8 items-center justify-center rounded-md bg-surface2 text-accent">✓</span>
-            <span class="text-base font-medium">No hallucinated numbers</span>
-          </div>
-          <p class="mt-3 text-sm text-fgMuted">Every score, odd and injury is sourced from a tool. Missing data is surfaced, never fabricated.</p>
-        </div>
+      <div>
+        <div class="text-[10px] uppercase tracking-[0.14em] text-fgSubtle" data-tr="Benim görüşüm" data-en="My angle">Benim görüşüm</div>
+        <p class="mt-1 text-[15px] leading-relaxed"
+           data-tr="Ana senaryoda piyasayla aynı taraftayım. United'ın fiyatı dürüst — 1.70'in altına oynamam. Beraberlik biraz ucuz duruyor."
+           data-en="I'm with the market on the base case. United's price looks fair — I wouldn't pay shorter than 1.70. The draw is slightly underpriced.">
+          Ana senaryoda piyasayla aynı taraftayım. United'ın fiyatı dürüst — 1.70'in altına oynamam. Beraberlik biraz ucuz duruyor.
+        </p>
       </div>
 
-      <div class="my-16 glow-accent flex flex-col items-start justify-between gap-6 rounded-xl border border-border bg-surface2 p-7 md:flex-row md:items-center">
+      <div class="rounded-xl border-l-2 border-pitch bg-pitch/10 p-3">
+        <div class="text-[10px] uppercase tracking-[0.14em] text-pitch" data-tr="Sürpriz olursa" data-en="If there's a surprise">Sürpriz olursa</div>
+        <p class="mt-1 text-[15px] leading-relaxed"
+           data-tr="En temiz sürpriz formu beraberlik, Leeds galibiyeti değil. United alçak bloku açmakta zorlanırsa skor 1-1 ya da 2-2'ye gider."
+           data-en="The cleanest upset path is the draw, not a Leeds win. If United struggle against a low block, the scoreline tilts to 1-1 or 2-2.">
+          En temiz sürpriz formu beraberlik, Leeds galibiyeti değil. United alçak bloku açmakta zorlanırsa skor 1-1 ya da 2-2'ye gider.
+        </p>
+      </div>
+
+      <div class="flex items-center gap-3 rounded-xl bg-surface2 p-3">
+        <div class="text-[10px] uppercase tracking-[0.14em] text-fgSubtle" data-tr="Güven" data-en="Confidence">Güven</div>
+        <div class="flex items-center gap-2">
+          <span class="text-xl font-extrabold text-pitch">7</span>
+          <span class="text-xs text-fgSubtle">/10</span>
+        </div>
+        <div class="ml-auto h-2 w-28 overflow-hidden rounded-full bg-bg">
+          <div class="h-full rounded-full bg-pitch" style="width:70%"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-4 flex flex-wrap items-center gap-1.5 border-t border-border pt-3 text-[11px]">
+      <span class="text-fgSubtle" data-tr="Kaynaklar:" data-en="Sources:">Kaynaklar:</span>
+      <span class="rounded-full bg-surface2 px-2 py-0.5 text-fgMuted">12 bookmaker</span>
+      <span class="rounded-full bg-surface2 px-2 py-0.5 text-fgMuted" data-tr="form (5 maç)" data-en="form (5 matches)">form (5 maç)</span>
+      <span class="rounded-full bg-surface2 px-2 py-0.5 text-fgMuted" data-tr="kadro" data-en="availability">kadro</span>
+      <span class="rounded-full bg-surface2 px-2 py-0.5 text-fgMuted">ensemble</span>
+    </div>
+  </div>
+
+  <div class="mt-4 rounded-2xl border border-border bg-surface p-3">
+    <div class="flex items-center gap-2">
+      <input type="text" placeholder="John'a bir şey sor…"
+             data-tr-ph="John'a bir şey sor…" data-en-ph="Ask John anything…"
+             class="flex-1 rounded-lg bg-surface2 px-3 py-2.5 text-sm placeholder:text-fgSubtle focus:outline-none focus:ring-2 focus:ring-pitch" />
+      <button class="inline-flex h-10 w-10 items-center justify-center rounded-lg shine text-bg">→</button>
+    </div>
+  </div>
+</main>
+
+<main id="screen-packages" class="screen hidden mx-auto max-w-2xl px-4 pb-24 pt-4">
+  <h1 class="text-xl font-semibold tracking-tight" data-tr="Paketler" data-en="Packages">Paketler</h1>
+  <p class="mt-1 text-sm text-fgMuted" data-tr="Takip ettiğin liglere abone ol. Jetonlar her ay yenilenir." data-en="Subscribe to leagues you follow. Tokens renew monthly.">Takip ettiğin liglere abone ol. Jetonlar her ay yenilenir.</p>
+
+  <div class="mt-5 space-y-3">
+    <div class="rounded-2xl border border-border bg-surface p-4">
+      <div class="flex items-center justify-between">
         <div>
-          <div class="text-xs uppercase tracking-wider text-fgSubtle">Pricing</div>
-          <h3 class="mt-2 text-2xl font-semibold tracking-tight">League-based packages, token-priced answers.</h3>
-          <p class="mt-2 max-w-xl text-fgMuted">Subscribe to the leagues you follow. Fast pundit answers cost 1 token, sharp analysis costs 5. Monthly tokens renew; top-ups available any time.</p>
+          <div class="text-sm font-semibold" data-tr="Ücretsiz" data-en="Free">Ücretsiz</div>
+          <div class="text-[11px] text-fgSubtle">20 <span data-tr="jeton/ay" data-en="tokens/mo">jeton/ay</span></div>
         </div>
-        <button class="rounded-md bg-accent px-5 py-3 text-sm text-white">See plans</button>
+        <div class="text-lg font-extrabold">$0</div>
+      </div>
+    </div>
+
+    <div class="relative rounded-2xl border-2 border-pitch/60 bg-surface p-4">
+      <span class="absolute -top-2 left-4 rounded-full bg-pitch px-2 py-0.5 text-[10px] font-semibold text-bg" data-tr="EN POPÜLER" data-en="MOST POPULAR">EN POPÜLER</span>
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="text-sm font-semibold">England Pack · John 🏴</div>
+          <div class="text-[11px] text-fgSubtle">500 <span data-tr="jeton/ay · Fast + Sharp" data-en="tokens/mo · Fast + Sharp">jeton/ay · Fast + Sharp</span></div>
+        </div>
+        <div class="text-lg font-extrabold">$9.99</div>
+      </div>
+      <button class="mt-3 w-full rounded-lg shine py-2.5 text-sm font-semibold text-bg" data-tr="Abone ol" data-en="Subscribe">Abone ol</button>
+    </div>
+
+    <div class="rounded-2xl border border-border bg-surface p-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="text-sm font-semibold">All-Leagues Pro 🌍</div>
+          <div class="text-[11px] text-fgSubtle">2000 <span data-tr="jeton/ay · Tüm ajanlar" data-en="tokens/mo · All agents">jeton/ay · Tüm ajanlar</span></div>
+        </div>
+        <div class="text-lg font-extrabold">$24.99</div>
+      </div>
+    </div>
+
+    <div class="rounded-2xl border border-border bg-surface p-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="text-sm font-semibold">Türkiye Pack · Emre 🇹🇷</div>
+          <div class="text-[11px] text-fgSubtle">500 <span data-tr="jeton/ay" data-en="tokens/mo">jeton/ay</span> · <span data-tr="yakında" data-en="soon">yakında</span></div>
+        </div>
+        <div class="text-lg font-extrabold text-fgMuted">$7.99</div>
+      </div>
+    </div>
+
+    <div class="rounded-2xl border border-border bg-surface p-4 text-sm text-fgMuted">
+      <div class="flex items-center justify-between">
+        <span data-tr="Top-up · 500 jeton" data-en="Top-up · 500 tokens">Top-up · 500 jeton</span>
+        <span class="font-semibold text-fg">$4.99</span>
       </div>
     </div>
   </div>
-</section>
+</main>
 
-<!-- =============== PRICING =============== -->
-<section id="panel-pricing" class="tab-panel hidden">
-  <div class="mx-auto max-w-5xl px-4 md:px-6 py-12">
-    <div class="max-w-2xl">
-      <h1 class="text-3xl font-semibold tracking-tight md:text-5xl">Subscribe to the leagues you follow.</h1>
-      <p class="mt-4 text-base text-fgMuted md:text-lg">Monthly tokens renew automatically. Fast pundit answers cost 1 token; sharp analysis costs 5. Cached queries are free.</p>
-    </div>
+<main id="screen-account" class="screen hidden mx-auto max-w-2xl px-4 pb-24 pt-4">
+  <h1 class="text-xl font-semibold tracking-tight" data-tr="Hesabım" data-en="Account">Hesabım</h1>
 
-    <div class="mt-10 grid grid-cols-1 gap-4 md:grid-cols-3">
-      <!-- Free -->
-      <div class="rounded-xl border border-border bg-surface p-6">
-        <div class="text-lg font-medium">Free</div>
-        <div class="mt-2 flex items-baseline gap-1"><span class="text-3xl font-semibold">$0</span><span class="text-sm text-fgSubtle">/ forever</span></div>
-        <div class="mt-1 text-sm text-fgMuted">20 tokens / month · Fast pundit only</div>
-        <ul class="mt-5 space-y-2 text-sm text-fgMuted">
-          <li>✓ Limited agent access</li>
-          <li>✓ Fast pundit answers (1 token each)</li>
-          <li>✓ Market consensus surfaced</li>
-        </ul>
-        <button class="mt-6 w-full rounded-md border border-border bg-surface2 py-2.5 text-sm">Start free</button>
-      </div>
-      <!-- England Pack -->
-      <div class="relative rounded-xl border border-accent/55 bg-surface2 p-6 glow-accent">
-        <span class="absolute -top-2 left-6 rounded-full border border-accent/40 bg-accent/20 px-2 py-0.5 text-[11px] text-accent">Most popular</span>
-        <div class="text-lg font-medium">England Pack</div>
-        <div class="mt-2 flex items-baseline gap-1"><span class="text-3xl font-semibold">$9.99</span><span class="text-sm text-fgSubtle">/ month</span></div>
-        <div class="mt-1 text-sm text-fgMuted">500 tokens / month · Fast + Sharp</div>
-        <ul class="mt-5 space-y-2 text-sm text-fgMuted">
-          <li>✓ John — Premier League + Championship</li>
-          <li>✓ Sharp analysis (5 tokens)</li>
-          <li>✓ Line movement history</li>
-          <li>✓ Top-ups any time</li>
-        </ul>
-        <button class="mt-6 w-full rounded-md bg-accent py-2.5 text-sm text-white">Subscribe</button>
-      </div>
-      <!-- Pro -->
-      <div class="rounded-xl border border-border bg-surface p-6">
-        <div class="text-lg font-medium">All-Leagues Pro</div>
-        <div class="mt-2 flex items-baseline gap-1"><span class="text-3xl font-semibold">$24.99</span><span class="text-sm text-fgSubtle">/ month</span></div>
-        <div class="mt-1 text-sm text-fgMuted">2000 tokens / month · All agents</div>
-        <ul class="mt-5 space-y-2 text-sm text-fgMuted">
-          <li>✓ John, Carlos, Hans, Emre</li>
-          <li>✓ Sharp analysis mode</li>
-          <li>✓ Market movement add-on</li>
-          <li>✓ Priority model queue</li>
-        </ul>
-        <button class="mt-6 w-full rounded-md border border-border bg-surface2 py-2.5 text-sm">Go pro</button>
+  <div class="mt-4 rounded-2xl border border-border bg-surface p-4">
+    <div class="flex items-center gap-3">
+      <span class="crest h-11 w-11 rounded-full shine text-bg">U</span>
+      <div>
+        <div class="text-sm font-semibold">user@futbool.app</div>
+        <div class="text-[11px] text-fgSubtle" data-tr="Ücretsiz üye" data-en="Free member">Ücretsiz üye</div>
       </div>
     </div>
-
-    <h2 class="mt-14 text-xs font-medium uppercase tracking-wider text-fgSubtle">Other packages</h2>
-    <div class="mt-3 overflow-hidden rounded-xl border border-borderSubtle">
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="bg-surface text-left text-xs uppercase tracking-wider text-fgSubtle">
-            <th class="px-4 py-3 font-medium">Pack</th>
-            <th class="px-4 py-3 font-medium">Agent · League</th>
-            <th class="px-4 py-3 font-medium">Tokens</th>
-            <th class="px-4 py-3 text-right font-medium">Price</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr class="border-t border-borderSubtle"><td class="px-4 py-3 font-medium">Spain Pack</td><td class="px-4 py-3 text-fgMuted">Carlos — La Liga</td><td class="px-4 py-3 text-fgMuted">500</td><td class="px-4 py-3 text-right">$9.99</td></tr>
-          <tr class="border-t border-borderSubtle"><td class="px-4 py-3 font-medium">Germany Pack</td><td class="px-4 py-3 text-fgMuted">Hans — Bundesliga</td><td class="px-4 py-3 text-fgMuted">500</td><td class="px-4 py-3 text-right">$9.99</td></tr>
-          <tr class="border-t border-borderSubtle"><td class="px-4 py-3 font-medium">Türkiye Pack</td><td class="px-4 py-3 text-fgMuted">Emre — Süper Lig</td><td class="px-4 py-3 text-fgMuted">500</td><td class="px-4 py-3 text-right">$7.99</td></tr>
-          <tr class="border-t border-borderSubtle"><td class="px-4 py-3 font-medium">Top-up 500</td><td class="px-4 py-3 text-fgMuted">any active agent</td><td class="px-4 py-3 text-fgMuted">+500 (one-time)</td><td class="px-4 py-3 text-right">$4.99</td></tr>
-        </tbody>
-      </table>
+    <div class="mt-4 rounded-xl bg-surface2 p-3">
+      <div class="flex items-center justify-between text-sm">
+        <span class="text-fgMuted" data-tr="Bu ayki jetonlar" data-en="Tokens this month">Bu ayki jetonlar</span>
+        <span class="font-semibold">18 / 20</span>
+      </div>
+      <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-bg">
+        <div class="h-full rounded-full bg-pitch" style="width:90%"></div>
+      </div>
     </div>
-    <p class="mt-6 text-xs text-fgSubtle">Checkout lands in Phase 2 (Stripe). Pricing above is final target.</p>
+    <button onclick="showScreen('packages')" class="mt-3 w-full rounded-lg shine py-2.5 text-sm font-semibold text-bg" data-tr="Paket yükselt" data-en="Upgrade plan">Paket yükselt</button>
   </div>
-</section>
+
+  <div class="mt-3 divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface text-sm">
+    <a class="flex items-center justify-between px-4 py-3"><span data-tr="Bildirimler" data-en="Notifications">Bildirimler</span><span class="text-fgSubtle">›</span></a>
+    <a class="flex items-center justify-between px-4 py-3"><span data-tr="Favori takımlar" data-en="Favourite teams">Favori takımlar</span><span class="text-fgSubtle">›</span></a>
+    <a class="flex items-center justify-between px-4 py-3"><span data-tr="Yardım" data-en="Help">Yardım</span><span class="text-fgSubtle">›</span></a>
+    <a class="flex items-center justify-between px-4 py-3 text-live"><span data-tr="Çıkış yap" data-en="Sign out">Çıkış yap</span><span>›</span></a>
+  </div>
+</main>
+
+<nav class="fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-bg/95 backdrop-blur">
+  <div class="mx-auto flex max-w-2xl items-stretch justify-around px-2 pt-1.5" style="padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);">
+    <button data-nav="matches" class="nav-btn flex flex-1 flex-col items-center gap-0.5 py-1.5 text-pitch">
+      <span class="text-lg">⚽</span>
+      <span class="text-[10px] font-medium" data-tr="Maçlar" data-en="Matches">Maçlar</span>
+    </button>
+    <button data-nav="analysis" class="nav-btn flex flex-1 flex-col items-center gap-0.5 py-1.5 text-fgSubtle">
+      <span class="text-lg">🧠</span>
+      <span class="text-[10px] font-medium" data-tr="Analiz" data-en="Analysis">Analiz</span>
+    </button>
+    <button data-nav="packages" class="nav-btn flex flex-1 flex-col items-center gap-0.5 py-1.5 text-fgSubtle">
+      <span class="text-lg">⭐</span>
+      <span class="text-[10px] font-medium" data-tr="Paketler" data-en="Packages">Paketler</span>
+    </button>
+    <button data-nav="account" class="nav-btn flex flex-1 flex-col items-center gap-0.5 py-1.5 text-fgSubtle">
+      <span class="text-lg">👤</span>
+      <span class="text-[10px] font-medium" data-tr="Hesabım" data-en="Account">Hesabım</span>
+    </button>
+  </div>
+</nav>
 
 <script>
-  // Tab switcher
-  document.querySelectorAll('.tab-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const tab = btn.getAttribute('data-tab');
-      document.querySelectorAll('.tab-btn').forEach((b) => {
-        b.classList.remove('tab-active');
-        b.classList.add('text-fgMuted');
-      });
-      btn.classList.add('tab-active');
-      btn.classList.remove('text-fgMuted');
-      document.querySelectorAll('.tab-panel').forEach((p) => p.classList.add('hidden'));
-      document.getElementById('panel-' + tab).classList.remove('hidden');
-      window.scrollTo({ top: 0 });
+  function showScreen(name) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+    document.getElementById('screen-' + name).classList.remove('hidden');
+    document.querySelectorAll('.nav-btn').forEach(b => {
+      const on = b.dataset.nav === name;
+      b.classList.toggle('text-pitch', on);
+      b.classList.toggle('text-fgSubtle', !on);
     });
+    window.scrollTo({ top: 0 });
+  }
+  document.querySelectorAll('.nav-btn').forEach(b => {
+    b.addEventListener('click', () => showScreen(b.dataset.nav));
   });
 
-  // Mobile sidebar toggle (chat)
-  const sidebar = document.getElementById('sidebar');
-  document.getElementById('mobileMenu')?.addEventListener('click', () => {
-    sidebar.classList.toggle('hidden');
-    sidebar.classList.toggle('fixed');
-    sidebar.classList.toggle('inset-0');
-    sidebar.classList.toggle('z-30');
-    sidebar.classList.toggle('w-64');
-    sidebar.classList.toggle('bg-bg');
-  });
+  function setLang(lang) {
+    document.documentElement.lang = lang;
+    document.querySelectorAll('[data-tr]').forEach(el => {
+      const txt = el.getAttribute('data-' + lang);
+      if (txt) el.innerHTML = txt;
+    });
+    document.querySelectorAll('[data-tr-ph]').forEach(el => {
+      const ph = el.getAttribute('data-' + lang + '-ph');
+      if (ph) el.setAttribute('placeholder', ph);
+    });
+    const tr = document.getElementById('lang-tr'), en = document.getElementById('lang-en');
+    tr.classList.toggle('bg-surface2', lang === 'tr');
+    tr.classList.toggle('text-fgMuted', lang !== 'tr');
+    en.classList.toggle('bg-surface2', lang === 'en');
+    en.classList.toggle('text-fgMuted', lang !== 'en');
+    try { localStorage.setItem('futbool-lang', lang); } catch (e) {}
+  }
+  document.getElementById('lang-tr').addEventListener('click', () => setLang('tr'));
+  document.getElementById('lang-en').addEventListener('click', () => setLang('en'));
+
+  try {
+    const saved = localStorage.getItem('futbool-lang');
+    if (saved === 'en') setLang('en');
+  } catch (e) {}
 </script>
 
 </body>
