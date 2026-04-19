@@ -1,7 +1,7 @@
 """Futbool backend entry point.
 
 Phase 1: auth + chat (with Claude tool-use loop against mock providers).
-Phase 2: adds Stripe / billing routes.
+Phase 2: Stripe billing + token ledger + agent access gate.
 Phase 3: admin routes.
 """
 
@@ -11,10 +11,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.auth.routes import router as auth_router
+from backend.billing.routes import router as billing_router
 from backend.chat.routes import router as chat_router
 from backend.core.config import get_settings
 
-app = FastAPI(title="Futbool API", version="0.1.0")
+app = FastAPI(title="Futbool API", version="0.2.0")
 
 _settings = get_settings()
 app.add_middleware(
@@ -27,11 +28,12 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(chat_router)
+app.include_router(billing_router)
 
 
 @app.get("/healthz")
 async def healthz() -> dict:
-    return {"status": "ok", "phase": 1, "use_mock_providers": _settings.use_mock_providers}
+    return {"status": "ok", "phase": 2, "use_mock_providers": _settings.use_mock_providers}
 
 
 @app.get("/v1/agents")
