@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Loader2, ShieldCheck } from "lucide-react";
 import {
   adminAnalytics,
+  adminGrantTokens,
   adminListLedger,
   adminListProducts,
   adminListUsers,
@@ -210,10 +211,32 @@ function ProductsTab() {
 
 function UsersTab() {
   const [q, setQ] = useState("");
-  const { data, err, loading, reload } = useAsync<{ users: AdminUser[] }>(
+  const { data, err, loading } = useAsync<{ users: AdminUser[] }>(
     () => adminListUsers(q),
     [q]
   );
+  const [granting, setGranting] = useState<string | null>(null);
+  const [amount, setAmount] = useState<string>("100");
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [lastResult, setLastResult] = useState<string | null>(null);
+
+  async function save(userId: string) {
+    const n = Number(amount);
+    if (!Number.isFinite(n) || n <= 0) return;
+    setSaving(true);
+    try {
+      const res = await adminGrantTokens(userId, n, note || undefined);
+      setLastResult(`+${n} → new balance ${res.balance}`);
+      setGranting(null);
+      setAmount("100");
+      setNote("");
+    } catch (e) {
+      setLastResult(e instanceof Error ? e.message : "grant failed");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div>
@@ -223,6 +246,11 @@ function UsersTab() {
         placeholder="search email…"
         className="mb-3 w-full rounded-md border border-default bg-surface-2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
       />
+      {lastResult && (
+        <div className="mb-3 rounded-md border border-default bg-surface-2 px-3 py-2 text-xs text-fg-muted">
+          {lastResult}
+        </div>
+      )}
       {loading && <Loading />}
       {err && <Err msg={err} />}
       <div className="overflow-hidden rounded-2xl border border-default">
@@ -233,18 +261,56 @@ function UsersTab() {
               <th className="px-3 py-2 font-medium">Role</th>
               <th className="px-3 py-2 font-medium">Tier</th>
               <th className="px-3 py-2 font-medium">Joined</th>
+              <th className="px-3 py-2 font-medium"></th>
             </tr>
           </thead>
           <tbody>
             {data?.users.map((u) => (
-              <tr key={u.id} className="border-t border-subtle bg-surface">
-                <td className="px-3 py-2 font-medium">{u.email}</td>
-                <td className="px-3 py-2">{u.role}</td>
-                <td className="px-3 py-2">{u.tier}</td>
-                <td className="px-3 py-2 text-fg-subtle">
-                  {new Date(u.created_at).toLocaleDateString()}
-                </td>
-              </tr>
+              <>
+                <tr key={u.id} className="border-t border-subtle bg-surface">
+                  <td className="px-3 py-2 font-medium">{u.email}</td>
+                  <td className="px-3 py-2">{u.role}</td>
+                  <td className="px-3 py-2">{u.tier}</td>
+                  <td className="px-3 py-2 text-fg-subtle">
+                    {new Date(u.created_at).toLocaleDateString()}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <button
+                      onClick={() => setGranting(granting === u.id ? null : u.id)}
+                      className="rounded-md bg-surface-2 px-2 py-1 text-[11px]"
+                    >
+                      {granting === u.id ? "close" : "grant"}
+                    </button>
+                  </td>
+                </tr>
+                {granting === u.id && (
+                  <tr className="border-t border-subtle bg-surface">
+                    <td colSpan={5} className="px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          value={amount}
+                          onChange={(e) => setAmount(e.target.value)}
+                          placeholder="tokens"
+                          className="w-24 rounded-md bg-surface-2 px-2 py-1 font-mono text-xs"
+                        />
+                        <input
+                          value={note}
+                          onChange={(e) => setNote(e.target.value)}
+                          placeholder="note"
+                          className="flex-1 rounded-md bg-surface-2 px-2 py-1 text-xs"
+                        />
+                        <button
+                          onClick={() => save(u.id)}
+                          disabled={saving}
+                          className="rounded-md shine px-3 py-1 text-[11px] font-semibold text-[var(--color-accent-fg)] disabled:opacity-60"
+                        >
+                          save
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </>
             ))}
           </tbody>
         </table>

@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { notFound, useParams } from "next/navigation";
+import { useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { AskJohnBar, JohnTake } from "@/components/john-take";
 import { MatchHero } from "@/components/match-hero";
+import { ModeToggle, type ChatMode } from "@/components/mode-toggle";
 import { OddsPanel } from "@/components/odds-panel";
 import { getMatch } from "@/lib/matches";
 import { useI18n } from "@/lib/i18n/context";
@@ -13,6 +15,7 @@ export default function MatchAnalysisPage() {
   const { t } = useI18n();
   const params = useParams<{ id: string }>();
   const match = getMatch(params.id);
+  const [mode, setMode] = useState<ChatMode>("fast");
   if (!match) return notFound();
 
   return (
@@ -32,11 +35,15 @@ export default function MatchAnalysisPage() {
       </div>
 
       <div className="mt-4">
+        <ModeToggle mode={mode} onChange={setMode} />
+      </div>
+
+      <div className="mt-4">
         <JohnTake />
       </div>
 
       <div className="mt-4">
-        <AskJohnBar />
+        <AskJohnBar mode={mode} />
       </div>
     </main>
   );

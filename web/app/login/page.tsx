@@ -75,6 +75,11 @@ export default function LoginPage() {
             Create an account
           </Link>
         </p>
+        <p className="mt-2 text-center text-xs text-fg-subtle">
+          <Link href="/forgot-password" className="hover:text-fg">
+            Forgot password?
+          </Link>
+        </p>
       </Card>
     </main>
   );

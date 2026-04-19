@@ -54,7 +54,7 @@ export function JohnTake() {
   );
 }
 
-export function AskJohnBar() {
+export function AskJohnBar({ mode = "fast" }: { mode?: "fast" | "sharp" }) {
   const { t } = useI18n();
   return (
     <div className="rounded-2xl border border-default bg-surface p-3">
@@ -64,9 +64,15 @@ export function AskJohnBar() {
           placeholder={t("ask_john_ph")}
           className="flex-1 rounded-lg bg-surface-2 px-3 py-2.5 text-sm placeholder:text-fg-subtle focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
         />
-        <button className="inline-flex h-10 w-10 items-center justify-center rounded-lg shine text-[var(--color-accent-fg)]">
+        <button
+          title={mode === "sharp" ? t("mode_sharp_cost") : t("mode_fast_cost")}
+          className="inline-flex h-10 w-10 items-center justify-center rounded-lg shine text-[var(--color-accent-fg)]"
+        >
           <ArrowUp className="h-4 w-4" />
         </button>
+      </div>
+      <div className="mt-1.5 text-[10px] text-fg-subtle">
+        {mode === "sharp" ? t("mode_sharp_cost") : t("mode_fast_cost")}
       </div>
     </div>
   );

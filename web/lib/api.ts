@@ -211,3 +211,12 @@ export async function adminListLedger() {
 export async function adminAnalytics() {
   return adminGet<AdminAnalytics>("/analytics");
 }
+export async function adminGrantTokens(userId: string, amount: number, note?: string) {
+  const res = await fetch(`${API_BASE}/v1/admin/users/${userId}/tokens`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(await authHeader()) },
+    body: JSON.stringify({ amount, note }),
+  });
+  if (!res.ok) throw new Error(`grant failed (${res.status})`);
+  return res.json() as Promise<{ balance: number }>;
+}

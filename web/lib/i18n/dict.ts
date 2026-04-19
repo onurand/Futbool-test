@@ -83,6 +83,27 @@ export const DICT = {
   },
   src_form:    { tr: "form (5 maç)", en: "form (5 matches)" },
   src_squad:   { tr: "kadro",        en: "availability" },
+
+  // Mode toggle
+  mode_fast:       { tr: "Hızlı",              en: "Fast" },
+  mode_sharp:      { tr: "Derin analiz",       en: "Sharp" },
+  mode_fast_cost:  { tr: "1 jeton",            en: "1 token" },
+  mode_sharp_cost: { tr: "5 jeton · daha uzun", en: "5 tokens · longer" },
+
+  // Password reset
+  forgot_password:      { tr: "Şifremi unuttum", en: "Forgot password" },
+  reset_password:       { tr: "Şifre sıfırla",   en: "Reset password" },
+  reset_email_sent:     { tr: "Sıfırlama bağlantısı e-postana gönderildi.",
+                          en: "Reset link sent to your email." },
+  set_new_password:     { tr: "Yeni şifre belirle", en: "Set a new password" },
+  password_updated:     { tr: "Şifre güncellendi.", en: "Password updated." },
+
+  // Admin
+  admin_grant_tokens:   { tr: "Jeton ver",    en: "Grant tokens" },
+  admin_amount:         { tr: "Miktar",       en: "Amount" },
+  admin_note:           { tr: "Not (opsiyonel)", en: "Note (optional)" },
+  admin_save:           { tr: "Kaydet",       en: "Save" },
+  admin_cancel:         { tr: "İptal",        en: "Cancel" },
 } as const;
 
 export type DictKey = keyof typeof DICT;
