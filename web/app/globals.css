@@ -4,31 +4,31 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
-  /* Neutral scale — Claude-esque dark-first palette. */
-  --color-bg: oklch(0.15 0.005 260);
-  --color-surface: oklch(0.19 0.006 260);
-  --color-surface-2: oklch(0.23 0.008 260);
-  --color-border: oklch(0.30 0.008 260);
-  --color-border-subtle: oklch(0.25 0.006 260);
-  --color-fg: oklch(0.96 0.01 260);
-  --color-fg-muted: oklch(0.72 0.01 260);
-  --color-fg-subtle: oklch(0.55 0.01 260);
+  /* Stadium-night palette: warm green-tinted dark. */
+  --color-bg:           oklch(0.16 0.015 155);
+  --color-surface:      oklch(0.21 0.020 155);
+  --color-surface-2:    oklch(0.26 0.024 155);
+  --color-border:       oklch(0.34 0.025 155);
+  --color-border-subtle:oklch(0.28 0.020 155);
+  --color-fg:           oklch(0.97 0.01 155);
+  --color-fg-muted:     oklch(0.74 0.012 155);
+  --color-fg-subtle:    oklch(0.52 0.012 155);
 
-  /* Agent accents — default John = English blue. */
-  --color-accent: oklch(0.62 0.18 255);
-  --color-accent-fg: oklch(0.98 0.01 260);
+  /* Pitch green accent. */
+  --color-accent:       oklch(0.78 0.19 142);
+  --color-accent-2:     oklch(0.62 0.17 142);
+  --color-accent-fg:    oklch(0.16 0.015 155);
 
   /* Semantic */
-  --color-success: oklch(0.72 0.17 155);
-  --color-warning: oklch(0.80 0.16 75);
-  --color-danger: oklch(0.65 0.22 25);
+  --color-success: oklch(0.78 0.19 142);
+  --color-warning: oklch(0.82 0.18 75);
+  --color-danger:  oklch(0.66 0.24 25);
+  --color-live:    oklch(0.68 0.24 25);
+  --color-gold:    oklch(0.82 0.16 85);
 }
 
 @layer base {
-  * {
-    border-color: var(--color-border-subtle);
-  }
-
+  * { border-color: var(--color-border-subtle); }
   html, body {
     background: var(--color-bg);
     color: var(--color-fg);
@@ -36,41 +36,35 @@
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
-
   ::selection {
     background: color-mix(in oklch, var(--color-accent) 45%, transparent);
     color: var(--color-accent-fg);
   }
-
-  /* Firefox & chromium scrollbars */
-  * { scrollbar-width: thin; scrollbar-color: var(--color-border) transparent; }
-  ::-webkit-scrollbar { width: 8px; height: 8px; }
-  ::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 999px; }
-  ::-webkit-scrollbar-thumb:hover { background: var(--color-fg-subtle); }
+  * { scrollbar-width: none; }
+  ::-webkit-scrollbar { width: 0; height: 0; }
 }
 
 @layer utilities {
-  .bg-bg { background-color: var(--color-bg); }
-  .bg-surface { background-color: var(--color-surface); }
+  .bg-bg        { background-color: var(--color-bg); }
+  .bg-surface   { background-color: var(--color-surface); }
   .bg-surface-2 { background-color: var(--color-surface-2); }
-  .text-fg { color: var(--color-fg); }
-  .text-fg-muted { color: var(--color-fg-muted); }
+  .text-fg        { color: var(--color-fg); }
+  .text-fg-muted  { color: var(--color-fg-muted); }
   .text-fg-subtle { color: var(--color-fg-subtle); }
-  .border-subtle { border-color: var(--color-border-subtle); }
   .border-default { border-color: var(--color-border); }
-  .text-accent { color: var(--color-accent); }
-  .bg-accent { background-color: var(--color-accent); }
+  .border-subtle  { border-color: var(--color-border-subtle); }
+  .text-accent    { color: var(--color-accent); }
+  .bg-accent      { background-color: var(--color-accent); }
+  .text-live      { color: var(--color-live); }
+  .bg-live        { background-color: var(--color-live); }
+  .text-gold      { color: var(--color-gold); }
 
-  .glow-accent {
-    box-shadow: 0 0 0 1px color-mix(in oklch, var(--color-accent) 45%, transparent),
-                0 10px 40px -10px color-mix(in oklch, var(--color-accent) 35%, transparent);
+  .shine {
+    background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%);
   }
-
-  .grid-dots {
-    background-image: radial-gradient(
-      color-mix(in oklch, var(--color-fg) 10%, transparent) 1px,
-      transparent 1px
-    );
-    background-size: 28px 28px;
+  .pitch-lines {
+    background-image:
+      linear-gradient(90deg, transparent 49.6%, oklch(1 0 0 / .06) 49.6%, oklch(1 0 0 / .06) 50.4%, transparent 50.4%),
+      radial-gradient(circle at 50% 50%, transparent 40px, oklch(1 0 0 / .06) 40px, oklch(1 0 0 / .06) 41px, transparent 41px);
   }
 }

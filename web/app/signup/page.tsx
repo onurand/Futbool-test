@@ -30,7 +30,7 @@ export default function SignupPage() {
       return;
     }
     if (data.session) {
-      router.push("/chat");
+      router.push("/");
     } else {
       setInfo("Check your inbox to confirm your email, then log in.");
     }

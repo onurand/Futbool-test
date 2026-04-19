@@ -27,7 +27,7 @@ export default function LoginPage() {
       setError(error.message);
       return;
     }
-    router.push("/chat");
+    router.push("/");
   }
 
   return (
