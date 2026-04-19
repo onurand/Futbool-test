@@ -172,23 +172,17 @@ Routes under `/admin` (frontend) + `/v1/admin/*` (backend), gated by `role = adm
 
 ## Phased delivery
 
-### Phase 0 — Scaffold (this commit)
-Repo, env, docker-compose, prompts, tool schemas, placeholders.
+| Phase | Scope                                                       | Status |
+| ----- | ----------------------------------------------------------- | ------ |
+| 0     | Repo scaffold, docs, schemas                                | ✅ |
+| 1     | Supabase auth + 6 tool handlers + Claude tool-use loop      | ✅ |
+| 2     | Stripe subscriptions + token ledger + agent access gate     | ✅ |
+| 3     | Next.js web UI (sportsbook-style, TR/EN) + admin panel      | ✅ |
+| 4     | Ensemble model + live Sportmonks/Odds/football-data clients | ✅ |
+| 5     | Mobile wrapper via Capacitor (Android + iOS)                | ✅ |
+| 6     | Carlos, Hans, Emre — localised prompts, active              | ✅ |
+| 7+    | Streaming responses, push notifications, H2H signal,        | ⏳ |
+|       | tactical retrieval index, StoreKit IAP for iOS              |    |
 
-### Phase 1 — Backend MVP
-Supabase auth, 6 tool handlers, Sportmonks + Odds API integration, Claude tool-use loop, Redis cache.
-
-### Phase 2 — Stripe + token system
-Products, checkout, customer portal, webhook handler, token ledger, quota middleware, agent access gate.
-
-### Phase 3 — Web UI + Admin Panel
-Next.js: chat, pricing, account, admin.
-
-### Phase 4 — Smarter John
-Ensemble model, retrieval indexes, fast pundit + sharp analysis modes.
-
-### Phase 5 — Mobile (APK / iOS)
-React Native or Capacitor. Apple IAP consideration for App Store.
-
-### Phase 6 — More agents
-Carlos, Hans, Emre — same tools, new prompts, new packages.
+See [`docs/LIVE_SETUP.md`](docs/LIVE_SETUP.md) for going live and
+[`docs/MOBILE.md`](docs/MOBILE.md) for APK / IPA builds.
