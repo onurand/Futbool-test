@@ -15,6 +15,7 @@ from backend.auth.routes import router as auth_router
 from backend.billing.routes import router as billing_router
 from backend.chat.routes import router as chat_router
 from backend.core.config import get_settings
+from backend.matches.routes import router as matches_router
 
 app = FastAPI(title="Futbool API", version="0.2.0")
 
@@ -28,6 +29,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(matches_router)
 app.include_router(chat_router)
 app.include_router(billing_router)
 app.include_router(admin_router)

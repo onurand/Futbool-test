@@ -61,6 +61,37 @@ export async function sendChat(
   return res.json();
 }
 
+// -------------------- Matches --------------------
+
+export type ApiTeam = { id: string; name: string; short?: string };
+export type ApiMatch = {
+  id: string;
+  league: string;
+  league_short?: string;
+  kickoff_utc: string;
+  status: string;
+  home: ApiTeam;
+  away: ApiTeam;
+};
+
+export async function listMatches(): Promise<{ fixtures: ApiMatch[]; source: string }> {
+  const res = await fetch(`${API_BASE}/v1/matches`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`matches failed (${res.status})`);
+  return res.json();
+}
+
+export async function getMatch(id: string): Promise<Record<string, unknown>> {
+  const res = await fetch(`${API_BASE}/v1/matches/${id}`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`match ${id} failed (${res.status})`);
+  return res.json();
+}
+
+export async function getMatchOdds(id: string): Promise<Record<string, unknown>> {
+  const res = await fetch(`${API_BASE}/v1/matches/${id}/odds`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`match odds failed (${res.status})`);
+  return res.json();
+}
+
 // -------------------- Billing --------------------
 
 export type BillingMe = {
