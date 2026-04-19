@@ -43,7 +43,7 @@ REGISTRY: dict[str, Agent] = {
         leagues=("La Liga",),
         prompt_file="carlos.md",
         required_packages=("spain_pack", "all_leagues_pro"),
-        status="planned",
+        status="active",
     ),
     "hans": Agent(
         code="hans",
@@ -51,7 +51,7 @@ REGISTRY: dict[str, Agent] = {
         leagues=("Bundesliga",),
         prompt_file="hans.md",
         required_packages=("germany_pack", "all_leagues_pro"),
-        status="planned",
+        status="active",
     ),
     "emre": Agent(
         code="emre",
@@ -59,7 +59,7 @@ REGISTRY: dict[str, Agent] = {
         leagues=("Süper Lig",),
         prompt_file="emre.md",
         required_packages=("turkiye_pack", "all_leagues_pro"),
-        status="planned",
+        status="active",
     ),
 }
 
