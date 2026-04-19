@@ -1,0 +1,121 @@
+{
+  "version": "0.1.0",
+  "tools": [
+    {
+      "name": "resolve_match_query",
+      "description": "Resolve natural-language match references into a specific fixture.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "competition_scope": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Example: ['Premier League', 'Championship']"
+          },
+          "team_query_1": { "type": "string" },
+          "team_query_2": { "type": "string" },
+          "date_hint": {
+            "type": "string",
+            "description": "Natural language date hint such as 'tonight' or ISO date"
+          }
+        },
+        "required": ["team_query_1", "team_query_2"]
+      }
+    },
+    {
+      "name": "get_fixture_context",
+      "description": "Get the core context for a fixture including competition, venue, kickoff time, officials, and high-level metadata.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "fixture_id": { "type": "string" }
+        },
+        "required": ["fixture_id"]
+      }
+    },
+    {
+      "name": "get_team_form",
+      "description": "Get recent form, home-away splits, scoring/conceding trends, and rolling metrics for one or both teams.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "team_ids": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "lookback_matches": {
+            "type": "integer",
+            "description": "Usually 5 or 10"
+          }
+        },
+        "required": ["team_ids"]
+      }
+    },
+    {
+      "name": "get_player_availability",
+      "description": "Get injuries, suspensions, expected absences, and projected lineup relevance for a fixture.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "fixture_id": { "type": "string" }
+        },
+        "required": ["fixture_id"]
+      }
+    },
+    {
+      "name": "get_market_odds_consensus",
+      "description": "Get bookmaker odds consensus for a fixture, including average, median, min-max and vig-clean implied probabilities.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "fixture_id": { "type": "string" },
+          "market": {
+            "type": "string",
+            "description": "Examples: h2h, totals, both_teams_to_score"
+          },
+          "bookmaker_filter": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Preferred bookmakers to include"
+          }
+        },
+        "required": ["fixture_id", "market"]
+      }
+    },
+    {
+      "name": "get_prediction_snapshot",
+      "description": "Return blended prediction outputs using market prior, team strength, form, matchup and player availability.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "fixture_id": { "type": "string" }
+        },
+        "required": ["fixture_id"]
+      }
+    }
+  ],
+  "example_outputs": {
+    "get_market_odds_consensus": {
+      "market": "h2h",
+      "bookmakers_used": 12,
+      "snapshot_time_utc": "2026-04-14T14:00:00Z",
+      "home": {
+        "mean_odds": 1.74,
+        "median_odds": 1.73,
+        "min_odds": 1.68,
+        "max_odds": 1.81,
+        "fair_probability": 0.55
+      },
+      "draw": {
+        "mean_odds": 3.88,
+        "median_odds": 3.85,
+        "fair_probability": 0.24
+      },
+      "away": {
+        "mean_odds": 4.95,
+        "median_odds": 5.0,
+        "fair_probability": 0.21
+      }
+    }
+  }
+}
