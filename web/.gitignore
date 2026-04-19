@@ -12,3 +12,7 @@ out/
 
 # ts build info
 *.tsbuildinfo
+
+# capacitor native projects — regenerate with `cap add`
+android/
+ios/
