@@ -1,4 +1,9 @@
-"""Redis cache helpers. Used for tool-result caching with per-tool TTLs."""
+"""Redis cache helpers. Used for tool-result caching with per-tool TTLs.
+
+Optional. If REDIS_URL is empty or Redis is unreachable, the cache layer
+silently no-ops — the backend keeps working, every tool call simply hits
+the upstream provider directly.
+"""
 
 from __future__ import annotations
 
@@ -23,8 +28,14 @@ TTL = {
 
 
 @lru_cache
-def redis_client() -> aioredis.Redis:
-    return aioredis.from_url(get_settings().redis_url, decode_responses=True)
+def redis_client() -> aioredis.Redis | None:
+    url = get_settings().redis_url
+    if not url:
+        return None
+    try:
+        return aioredis.from_url(url, decode_responses=True)
+    except Exception:
+        return None
 
 
 def cache_key(tool_name: str, args: dict[str, Any]) -> str:
@@ -33,9 +44,21 @@ def cache_key(tool_name: str, args: dict[str, Any]) -> str:
 
 
 async def cache_get(key: str) -> Any | None:
-    raw = await redis_client().get(key)
+    client = redis_client()
+    if client is None:
+        return None
+    try:
+        raw = await client.get(key)
+    except Exception:
+        return None
     return json.loads(raw) if raw else None
 
 
 async def cache_set(key: str, value: Any, ttl: int) -> None:
-    await redis_client().set(key, json.dumps(value, default=str), ex=ttl)
+    client = redis_client()
+    if client is None:
+        return
+    try:
+        await client.set(key, json.dumps(value, default=str), ex=ttl)
+    except Exception:
+        return

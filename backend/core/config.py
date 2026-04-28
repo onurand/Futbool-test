@@ -39,8 +39,8 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str = ""
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/futbool"
 
-    # Redis
-    redis_url: str = "redis://localhost:6379/0"
+    # Redis (optional — leave empty to disable cache entirely)
+    redis_url: str = ""
 
     # Stripe
     stripe_secret_key: str = ""
