@@ -12,6 +12,30 @@ npm install
 npm run dev                         # http://localhost:3000
 ```
 
+### Windows local dev (PowerShell)
+
+Repo root'tan `scripts/setup-env.ps1` çalıştırarak hem `.env` hem
+`web/.env.local` doldurulur. Ardından:
+
+```powershell
+cd $HOME\Documents\Futbool-test\web
+npm install
+npm run dev
+```
+
+Terminal'i **kapatma** — `next dev` foreground process'tir, pencere
+kapanırsa server ölür ve tarayıcı `ERR_CONNECTION_REFUSED` görür.
+`✓ Ready in N ms` satırını gördükten sonra tarayıcıda
+`http://localhost:3000` aç.
+
+Backend ayrı bir PowerShell penceresinde çalışmalı:
+
+```powershell
+cd $HOME\Documents\Futbool-test
+.\.venv\Scripts\Activate.ps1
+uvicorn backend.main:app --reload --port 8000
+```
+
 ## Pages
 
 - `/`           landing
