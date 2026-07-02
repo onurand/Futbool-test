@@ -68,6 +68,20 @@ body { position: fixed; inset: 0; } /* iOS rubber-band scroll'u engelle */
 
 #stage { position: relative; }
 
+#track-chip {
+  position: absolute;
+  left: 5%;
+  top: 66.5%;
+  padding: 4px 10px;
+  border-radius: 10px;
+  background: #2f2a3e;
+  color: #ffd75e;
+  font-size: 13px;
+  font-weight: 800;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+
 #progress {
   position: relative;
   width: min(60vw, 220px);
