@@ -7,7 +7,7 @@
     "build": "node tools/pack-www.js",
     "sync": "npm run build && cap sync",
     "android": "npm run sync && cap open android",
-    "apk": "npm run sync && cd android && ./gradlew assembleDebug"
+    "apk": "npm run sync && node tools/build-apk.js"
   },
   "dependencies": {
     "@capacitor/android": "^7.0.0",

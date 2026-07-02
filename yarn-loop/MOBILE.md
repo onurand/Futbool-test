@@ -21,16 +21,40 @@ portre mod, safe-area desteği ve uygulama ikonları hazır.
 ## 2) Capacitor — APK / IPA
 
 Gerekli config bu klasörde hazır (`capacitor.config.json`, `package.json`).
-Kendi makinenizde (Android Studio / Android SDK kurulu):
+
+**Önkoşullar:** [Git](https://git-scm.com), [Node.js](https://nodejs.org) ve
+[Android Studio](https://developer.android.com/studio) (Android SDK'yı kurar).
+
+**Windows (PowerShell)** — eski PowerShell `&&` desteklemediği için komutlar
+tek tek (repo'yu daha önce klonladıysanız ilk üç satırı atlayın):
+
+```powershell
+git clone https://github.com/onurand/Futbool-test.git
+cd Futbool-test
+git checkout claude/yarn-loop-oyunu-clone-cpkm33
+cd yarn-loop
+npm install
+npx cap add android
+npm run apk
+# çıktı: android\app\build\outputs\apk\debug\app-debug.apk
+```
+
+**macOS / Linux:**
 
 ```bash
+git clone https://github.com/onurand/Futbool-test.git
+cd Futbool-test && git checkout claude/yarn-loop-oyunu-clone-cpkm33
 cd yarn-loop
-npm install            # @capacitor/core + cli + android
-npm run build          # statik dosyaları www/ içine kopyalar
-npx cap add android    # android/ projesini üretir (ilk seferde)
-npm run apk            # sync + gradle assembleDebug
+npm install
+npx cap add android
+npm run apk
 # çıktı: android/app/build/outputs/apk/debug/app-debug.apk
 ```
+
+`npm run apk` her platformda çalışır: doğru gradle wrapper'ını seçer ve
+Android SDK'yı (`ANDROID_HOME` ya da Android Studio'nun varsayılan kurulum
+yolundan) bulup `local.properties`'e yazar. APK'yı telefona atıp
+kurabilirsiniz ("bilinmeyen kaynaklara izin ver" gerekir).
 
 Android Studio ile açmak için: `npm run android`.
 
