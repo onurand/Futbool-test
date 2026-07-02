@@ -21,6 +21,12 @@ npx serve yarn-loop
 open yarn-loop/index.html
 ```
 
+## Mobil
+
+Oyun kurulabilir bir **PWA**'dır (çevrimdışı çalışır, tam ekran) ve
+**Capacitor** ile APK/IPA'ya paketlenebilir — ayrıntılar için
+[`MOBILE.md`](MOBILE.md).
+
 ## Teknik notlar
 
 - **Prosedürel seviyeler** — seed'li RNG (mulberry32) ile üretilir; N.

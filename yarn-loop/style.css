@@ -3,11 +3,16 @@
 html, body {
   height: 100%;
   overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: manipulation;
   font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
   background: radial-gradient(120% 120% at 50% 0%, #5b4b8a 0%, #38305e 55%, #221c3f 100%);
   -webkit-tap-highlight-color: transparent;
   user-select: none;
+  -webkit-user-select: none;
 }
+
+body { position: fixed; inset: 0; } /* iOS rubber-band scroll'u engelle */
 
 #game {
   height: 100%;
@@ -16,7 +21,8 @@ html, body {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  padding: 10px;
+  padding: calc(10px + env(safe-area-inset-top)) calc(10px + env(safe-area-inset-right))
+           calc(10px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
 }
 
 #hud {

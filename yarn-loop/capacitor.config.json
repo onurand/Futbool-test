@@ -1,0 +1,12 @@
+{
+  "appId": "com.madbyte.yarnloop",
+  "appName": "Yarn Loop",
+  "webDir": "www",
+  "backgroundColor": "#38305e",
+  "android": {
+    "allowMixedContent": false
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}
