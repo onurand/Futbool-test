@@ -46,6 +46,26 @@
   var shakeT = 0;
   var now = 0;
   var lastTime = 0;
+  var combo = 0;          // kesintisiz sarılan ilmek sayısı
+  var heartbeatT = 0;     // tehlike kalp atışı zamanlayıcısı
+
+  // kalıcı istatistikler (profil + koleksiyon)
+  var stats;
+  try { stats = JSON.parse(localStorage.getItem('yarnloop.stats')) || {}; } catch (e) { stats = {}; }
+  stats.maxLevel = stats.maxLevel || 1;
+  stats.stitches = stats.stitches || 0;
+  stats.spools = stats.spools || 0;
+  stats.stars = stats.stars || 0;
+  function saveStats() {
+    localStorage.setItem('yarnloop.stats', JSON.stringify(stats));
+  }
+
+  // sona yaklaştıkça ve kombo sürdükçe sarma hızlanır
+  function speedMult() {
+    if (!level) return 1;
+    var progress = pos / level.stream.length;
+    return Math.min(1 + progress * 1.7 + Math.min(combo * 0.012, 0.5), 3.2);
+  }
   var levelNum = parseInt(localStorage.getItem('yarnloop.level') || '1', 10);
   if (!(levelNum >= 1)) levelNum = 1;
 
@@ -91,8 +111,8 @@
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   var scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x4a423f);
-  scene.fog = new THREE.Fog(0x4a423f, 120, 190);
+  scene.background = new THREE.Color(0xc08a5b); // sıcak ahşap
+  scene.fog = new THREE.Fog(0xc08a5b, 120, 190);
 
   var camera = new THREE.PerspectiveCamera(40, W / H, 1, 300);
   camera.position.set(0, -3, 100);
@@ -101,8 +121,8 @@
   var root = new THREE.Group(); // sarsıntı/nabız için kök grup
   scene.add(root);
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-  var keyLight = new THREE.DirectionalLight(0xfff2e0, 0.9);
+  scene.add(new THREE.AmbientLight(0xfff4e6, 0.55));
+  var keyLight = new THREE.DirectionalLight(0xfff2e0, 0.95);
   keyLight.position.set(18, 30, 40);
   keyLight.castShadow = true;
   keyLight.shadow.mapSize.set(1024, 1024);
@@ -118,7 +138,7 @@
   // arka duvar (gölgeleri alır)
   var wall = new THREE.Mesh(
     new THREE.PlaneGeometry(140, 200),
-    new THREE.MeshStandardMaterial({ color: 0x554b48, roughness: 0.95 })
+    new THREE.MeshStandardMaterial({ color: 0xcb955f, roughness: 0.9 })
   );
   wall.position.z = -2.4;
   wall.receiveShadow = true;
@@ -126,7 +146,7 @@
 
   function resize() {
     var maxW = Math.min(window.innerWidth * 0.94, 420);
-    var maxH = window.innerHeight - 150;
+    var maxH = window.innerHeight - 205;
     var scale = Math.min(maxW / W, maxH / H);
     canvas.style.width = W * scale + 'px';
     canvas.style.height = H * scale + 'px';
@@ -142,7 +162,7 @@
     var key = hex + JSON.stringify(opts || {});
     if (!matCache[key]) {
       matCache[key] = new THREE.MeshStandardMaterial(Object.assign({
-        color: new THREE.Color(hex), roughness: 0.55, metalness: 0.05
+        color: new THREE.Color(hex), roughness: 0.38, metalness: 0.04
       }, opts || {}));
     }
     return matCache[key];
@@ -185,7 +205,7 @@
     var curve = new THREE.CatmullRomCurve3(pts, true);
     var railMesh = new THREE.Mesh(
       new THREE.TubeGeometry(curve, 200, 0.55, 10, true),
-      mat('#e8dcc4', { roughness: 0.4 })
+      mat('#7a4e2f', { roughness: 0.5 }) // koyu ahşap ray
     );
     railMesh.castShadow = true;
     staticGroup.add(railMesh);
@@ -193,24 +213,40 @@
     var studGeo = new THREE.SphereGeometry(0.22, 8, 8);
     for (t = 0; t < 1; t += 0.05) {
       var sp = railPoint(t);
-      var stud = new THREE.Mesh(studGeo, mat('#6b6058', { roughness: 0.3, metalness: 0.6 }));
+      var stud = new THREE.Mesh(studGeo, mat('#b98a5e', { roughness: 0.35, metalness: 0.3 }));
       stud.position.set(wx(sp.x), wy(sp.y), 2.0);
       staticGroup.add(stud);
     }
 
-    // örgü zemini (koyu pano)
+    // fiyonk süsü (makaraların bindiği nokta)
+    var bow = new THREE.Group();
+    var bowMat = mat('#ff7ad9', { roughness: 0.4 });
+    [-1, 1].forEach(function (dir) {
+      var wing = new THREE.Mesh(new THREE.ConeGeometry(0.9, 1.8, 10), bowMat);
+      wing.rotation.z = dir * Math.PI / 2;
+      wing.position.x = dir * 1.1;
+      bow.add(wing);
+    });
+    var knot = new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 10), mat('#ff4fa0', { roughness: 0.4 }));
+    bow.add(knot);
+    var bp = railPoint(0.635);
+    bow.position.set(wx(bp.x), wy(bp.y), 2.4);
+    bow.scale.setScalar(0.9);
+    staticGroup.add(bow);
+
+    // örgü zemini (krem pano)
     var back = new THREE.Mesh(
       new THREE.BoxGeometry((level.cols * cell + 14) * WS, (level.rows * cell + 14) * WS, 0.8),
-      mat('#33302e', { roughness: 0.9 })
+      mat('#f7e8d2', { roughness: 0.85 })
     );
     back.position.set(wx(W / 2), wy(boardY + level.rows * cell / 2), -0.5);
     back.receiveShadow = true;
     staticGroup.add(back);
 
-    // tepsi paneli
+    // tepsi paneli (ahşap)
     var tray = new THREE.Mesh(
       new THREE.BoxGeometry((W - 48) * WS, 12.4, 1.2),
-      mat('#3a3331', { roughness: 0.9 })
+      mat('#8a5a36', { roughness: 0.8 })
     );
     tray.position.set(0, wy(TRAY_Y + 6), -0.7);
     tray.receiveShadow = true;
@@ -273,16 +309,16 @@
     var body = mat(colorHex, { roughness: 0.5 });
     var dark = mat(shade(colorHex, -0.35), { roughness: 0.55 });
 
-    // sarım halkaları
-    for (var i = 0; i < 4; i++) {
-      var ring = new THREE.Mesh(new THREE.TorusGeometry(1.05, 0.42, 10, 24), i % 2 ? body : mat(shade(colorHex, 0.12), { roughness: 0.5 }));
+    // tombul sarım halkaları (şeker görünümü)
+    for (var i = 0; i < 3; i++) {
+      var ring = new THREE.Mesh(new THREE.TorusGeometry(1.0, 0.56, 12, 26), i % 2 ? body : mat(shade(colorHex, 0.15), { roughness: 0.32 }));
       ring.rotation.x = Math.PI / 2;
-      ring.position.y = -1.15 + i * 0.78;
+      ring.position.y = -1.05 + i * 1.05;
       ring.castShadow = true;
       g.add(ring);
     }
     // orta silindir
-    var core = new THREE.Mesh(new THREE.CylinderGeometry(1.02, 1.02, 3.2, 20), body);
+    var core = new THREE.Mesh(new THREE.CylinderGeometry(0.98, 0.98, 3.2, 20), body);
     core.position.y = 0;
     core.castShadow = true;
     g.add(core);
@@ -389,6 +425,37 @@
       mat(level.colors[activeSpool.color], { roughness: 0.45 })
     );
     root.add(strandMesh);
+  }
+
+  // ---------- bağlı makara ipleri ----------
+  var linkMeshes = [];
+  function updateLinks() {
+    linkMeshes.forEach(function (m) { root.remove(m); m.geometry.dispose(); });
+    linkMeshes = [];
+    var byIdx = {};
+    allSpools.forEach(function (sp) { if (sp.idx !== undefined) byIdx[sp.idx] = sp; });
+    allSpools.forEach(function (sp) {
+      if (sp.link === undefined || sp.idx === undefined || sp.link < sp.idx) return;
+      var partner = byIdx[sp.link];
+      if (!partner) return;
+      // ikisi de tepsideyken (ya da binerken) bağ görünür
+      var visible = (sp.state === 'tray' || sp.state === 'boarding') &&
+                    (partner.state === 'tray' || partner.state === 'boarding');
+      if (!visible) return;
+      // bağ yana kavis yapar ki üst üste duran çiftte de görünsün
+      var sway = 2.6 + Math.sin(now * 3) * 0.3;
+      var curve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(wx(sp.x) + 1.0, wy(sp.y) + 0.6, sp.z + 0.8),
+        new THREE.Vector3((wx(sp.x) + wx(partner.x)) / 2 + sway, (wy(sp.y) + wy(partner.y)) / 2, Math.max(sp.z, partner.z) + 1.4),
+        new THREE.Vector3(wx(partner.x) + 1.0, wy(partner.y) + 0.6, partner.z + 0.8)
+      ]);
+      var m = new THREE.Mesh(
+        new THREE.TubeGeometry(curve, 12, 0.14, 6, false),
+        mat(level.colors[sp.color], { roughness: 0.45 })
+      );
+      root.add(m);
+      linkMeshes.push(m);
+    });
   }
 
   // ---------- uçan ilmekler ----------
@@ -531,9 +598,13 @@
       return col.map(function (b, ri) {
         var sp = makeSpoolEntity(b.color, b.cap, TRAY_X[ci], TRAY_Y + ri * 8, ri === 0 ? 0.8 : 0.55);
         sp.z = 1.2 - ri * 0.5;
+        sp.idx = b.idx;
+        sp.link = b.link;
         return sp;
       });
     });
+    combo = 0;
+    heartbeatT = 0;
     convoy = [];
     activeSpool = null;
     railT = 0.62;
@@ -563,9 +634,22 @@
     }
     return null;
   }
-  function updateTrackChip() {
+  function updateTrackChip(danger) {
     var el = document.getElementById('track-chip');
-    if (el) el.textContent = convoy.length + '/' + MAX_TRACK;
+    if (!el) return;
+    el.textContent = convoy.length + '/' + MAX_TRACK;
+    el.className = danger ? 'danger' : (convoy.length >= MAX_TRACK ? 'full' : (convoy.length === MAX_TRACK - 1 ? 'warn' : ''));
+  }
+  function updateSpeedChip() {
+    var el = document.getElementById('speed-chip');
+    if (!el) return;
+    var m = speedMult();
+    if (m >= 1.4 && !won && !failed && activeSpool) {
+      el.textContent = '⚡x' + m.toFixed(1);
+      el.classList.remove('hidden');
+    } else {
+      el.classList.add('hidden');
+    }
   }
 
   // ---------- overlay & hud ----------
@@ -610,26 +694,40 @@
       y: (ev.clientY - rect.top) / rect.height * H
     };
   }
+  function boardSpool(sp, delay) {
+    convoy.push(sp);
+    sp.state = 'boarding';
+    maxDockUsed = Math.max(maxDockUsed, convoy.length);
+    var p = railPoint(railT - CONVOY_GAP * (convoy.length - 1));
+    cancelTweens(sp);
+    setTimeout(function () {
+      tween(sp, { x: p.x, y: p.y, scale: 0.92, z: 2.2 }, 0.45, easeOutBack, function () {
+        sp.state = 'riding';
+      });
+    }, (delay || 0) * 1000);
+  }
+
   function tapTray(colIdx) {
     if (won || failed) return false;
     var colArr = trayCols[colIdx];
     if (!colArr.length) return false;
-    if (convoy.length >= MAX_TRACK) {
-      colArr[0].shake = 1;
+    var front = colArr[0];
+    // bağlı çift: öndekinin eşi hemen arkasında — ikisi birden biner
+    var isPair = front.link !== undefined && colArr[1] && colArr[1].idx === front.link;
+    var needSlots = isPair ? 2 : 1;
+    if (convoy.length + needSlots > MAX_TRACK) {
+      front.shake = 1;
       sfx.blocked();
       return false;
     }
-    var sp = colArr.shift();
-    convoy.push(sp);
-    sp.state = 'boarding';
+    colArr.shift();
+    boardSpool(front, 0);
+    if (isPair) {
+      var partner = colArr.shift();
+      boardSpool(partner, 0.14);
+    }
     sfx.dockIn();
-    maxDockUsed = Math.max(maxDockUsed, convoy.length);
     updateTrackChip();
-    var p = railPoint(railT - CONVOY_GAP * (convoy.length - 1));
-    cancelTweens(sp);
-    tween(sp, { x: p.x, y: p.y, scale: 0.92, z: 2.2 }, 0.45, easeOutBack, function () {
-      sp.state = 'riding';
-    });
     colArr.forEach(function (b, ri) {
       cancelTweens(b);
       tween(b, { y: TRAY_Y + ri * 8, scale: ri === 0 ? 0.8 : 0.55, z: 1.2 - ri * 0.5 }, 0.3, easeOutBack);
@@ -646,6 +744,60 @@
     }
   });
 
+  // ---------- alt menü & paneller ----------
+  var BADGES = [
+    { lvl: 10, emoji: '🧶', name: 'İlk Yumak' },
+    { lvl: 20, emoji: '🐤', name: 'Civciv Ustası' },
+    { lvl: 30, emoji: '🌹', name: 'Gül Bahçesi' },
+    { lvl: 40, emoji: '⭐', name: 'Yıldız Örücü' },
+    { lvl: 50, emoji: '🍒', name: 'Kiraz Keyfi' },
+    { lvl: 60, emoji: '🏠', name: 'Yuva Kurdu' },
+    { lvl: 70, emoji: '🦄', name: 'Tek Boynuz' },
+    { lvl: 80, emoji: '🐱', name: 'Kedi Sever' },
+    { lvl: 90, emoji: '🌈', name: 'Gökkuşağı' },
+    { lvl: 100, emoji: '👑', name: 'Örgü Kralı' },
+    { lvl: 110, emoji: '🎀', name: 'Fiyonk Koleksiyoncusu' },
+    { lvl: 120, emoji: '🏆', name: 'Efsane' }
+  ];
+
+  function renderProfile() {
+    var el = document.getElementById('profile-body');
+    var unlocked = BADGES.filter(function (b) { return stats.maxLevel >= b.lvl; }).length;
+    el.innerHTML =
+      '<div class="stat-row"><span>🏔️ En yüksek seviye</span><b>' + stats.maxLevel + '</b></div>' +
+      '<div class="stat-row"><span>🧵 Sökülen ilmek</span><b>' + stats.stitches + '</b></div>' +
+      '<div class="stat-row"><span>🧶 Biten makara</span><b>' + stats.spools + '</b></div>' +
+      '<div class="stat-row"><span>⭐ Toplam yıldız</span><b>' + stats.stars + '</b></div>' +
+      '<div class="stat-row"><span>🎁 Açılan rozet</span><b>' + unlocked + ' / ' + BADGES.length + '</b></div>';
+  }
+
+  function renderCollection() {
+    var grid = document.getElementById('collection-grid');
+    grid.innerHTML = '';
+    BADGES.forEach(function (b) {
+      var unlocked = stats.maxLevel >= b.lvl;
+      var card = document.createElement('div');
+      card.className = 'badge-card' + (unlocked ? '' : ' locked');
+      card.innerHTML = '<span class="emoji">' + (unlocked ? b.emoji : '🔒') + '</span>' +
+        '<span class="name">' + b.name + '</span>' +
+        '<span class="lvl">Seviye ' + b.lvl + '</span>';
+      grid.appendChild(card);
+    });
+  }
+
+  document.querySelectorAll('.nav-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      ensureAudio();
+      document.querySelectorAll('.nav-btn').forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      var which = btn.getAttribute('data-panel');
+      document.getElementById('panel-profile').classList.toggle('hidden', which !== 'profile');
+      document.getElementById('panel-collection').classList.toggle('hidden', which !== 'collection');
+      if (which === 'profile') renderProfile();
+      if (which === 'collection') renderCollection();
+    });
+  });
+
   document.getElementById('btn-restart').addEventListener('click', function () { ensureAudio(); loadLevel(levelNum); });
   document.getElementById('btn-prev').addEventListener('click', function () { ensureAudio(); loadLevel(levelNum - 1); });
   document.getElementById('btn-next').addEventListener('click', function () { ensureAudio(); loadLevel(levelNum + 1); });
@@ -656,6 +808,7 @@
     convoy = convoy.filter(function (s) { return s !== sp; });
     if (activeSpool === sp) activeSpool = null;
     sp.state = 'completing';
+    stats.spools++;
     updateTrackChip();
     spawnSparkle(sp.x, sp.y);
     sfx.complete();
@@ -677,6 +830,9 @@
         won = true;
         sfx.win();
         spawnConfetti();
+        stats.stars += stars();
+        stats.maxLevel = Math.max(stats.maxLevel, levelNum + 1);
+        saveStats();
         setTimeout(function () { showOverlay(true); }, 800);
       } else {
         var spool = matchingTrackSpool();
@@ -685,18 +841,23 @@
           stalledSince = 0;
           if (activeSpool) {
             stitchTimer += dt * 1000;
-            while (stitchTimer >= STITCH_MS && pos < level.stream.length) {
+            // sona yaklaştıkça / kombo sürdükçe hızlanır
+            var ms = STITCH_MS / speedMult();
+            while (stitchTimer >= ms && pos < level.stream.length) {
               var st = level.stream[pos];
               if (st.color !== activeSpool.color || activeSpool.remaining === 0) break;
-              stitchTimer -= STITCH_MS;
+              stitchTimer -= ms;
               alive[st.r][st.c] = false;
               hideStitch(st.c, st.r);
               activeSpool.remaining--;
               pos++;
+              combo++;
+              stats.stitches++;
               updateProgress();
               sfx.stitch();
               spawnFlyer(st, activeSpool);
               railT += 0.011;
+              ms = STITCH_MS / speedMult();
               if (activeSpool.remaining === 0) {
                 completeSpool(activeSpool);
                 break;
@@ -707,14 +868,25 @@
           }
         } else {
           stitchTimer = 0;
+          combo = 0;
           if (convoy.length >= MAX_TRACK) {
+            // yanma geri sayımı: ray dolu + akış yok → 3 sn kalp atışı
             stalledSince += dt;
-            if (stalledSince > 0.9) {
+            heartbeatT += dt;
+            if (heartbeatT > 0.7) {
+              heartbeatT = 0;
+              beep(110, 90, 0.12, 'sine', 0.25);
+              shakeT = Math.max(shakeT, 0.25);
+            }
+            if (stalledSince > 3) {
               failed = true;
               shakeT = 1;
               sfx.fail();
+              saveStats();
               setTimeout(function () { showOverlay(false); }, 500);
             }
+          } else {
+            stalledSince = 0;
           }
         }
       }
@@ -745,8 +917,11 @@
 
     allSpools.forEach(syncSpool);
     updateStrand();
+    updateLinks();
     updateFlyers(dt);
     updateParticles(dt);
+    updateTrackChip(convoy.length >= MAX_TRACK && stalledSince > 0.2);
+    updateSpeedChip();
 
     // sarsıntı
     root.position.x = shakeT > 0 ? (Math.random() - 0.5) * 0.9 * shakeT : 0;

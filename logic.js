@@ -13,9 +13,10 @@
 (function (root) {
   'use strict';
 
+  // canlı şeker paleti (cute görünüm)
   var PALETTE = [
-    '#e5484d', '#f76b15', '#ffc53d', '#46a758', '#00a2c7',
-    '#3e63dd', '#8e4ec6', '#e93d82', '#f4f0e6', '#3b3b40'
+    '#ff5677', '#ff9f2e', '#ffd93d', '#4cd471', '#35c7f4',
+    '#5f7cff', '#c168ff', '#ff7ad9', '#fff3e0', '#5a4a52'
   ];
 
   var PATTERNS = [
@@ -167,17 +168,48 @@
       open[col]--;
     }
 
-    return {
+    var level = {
       n: n, name: pattern.name, rows: rows, cols: cols,
       grid: grid, colors: colors, stream: stream, spools: spools
     };
+
+    // bağlı makaralar: ardışık iki makara iple birbirine bağlanır —
+    // tepside biri altta biri üstte durur, öndekini alınca ikisi birden
+    // raya biner (2 slot ister). Seviye 5+ ve çözülebilirlik bozulmuyorsa.
+    if (n >= 5) {
+      var linkChance = Math.min(0.10 + n * 0.01, 0.3);
+      for (i = 0; i + 1 < spools.length; i++) {
+        if (spools[i].link !== undefined || spools[i + 1].link !== undefined) continue;
+        if (rnd() < linkChance) {
+          spools[i].link = i + 1;
+          spools[i + 1].link = i;
+          i++;
+        }
+      }
+      if (!solveCheck(level)) {
+        spools.forEach(function (sp) { delete sp.link; });
+      }
+    }
+
+    return level;
   }
 
+  // tepsi: makaralar açılış sırasıyla sütunlara dağıtılır; bağlı çift
+  // AYNI sütuna üst üste konur (öndekiyle birlikte arkadaki de gelir)
   function buildTray(level) {
     var trayCols = [[], [], [], [], []];
-    level.spools.forEach(function (sp, i) {
-      trayCols[i % 5].push({ color: sp.color, cap: sp.cap });
-    });
+    var col = 0;
+    for (var i = 0; i < level.spools.length; i++) {
+      var sp = level.spools[i];
+      var item = { color: sp.color, cap: sp.cap, idx: i, link: sp.link };
+      trayCols[col].push(item);
+      if (sp.link === i + 1) {
+        var partner = level.spools[i + 1];
+        trayCols[col].push({ color: partner.color, cap: partner.cap, idx: i + 1, link: i });
+        i++;
+      }
+      col = (col + 1) % 5;
+    }
     return trayCols;
   }
 
@@ -200,9 +232,12 @@
       }
       var found = false;
       for (var t = 0; t < 5; t++) {
-        if (trayCols[t].length && trayCols[t][0].color === need) {
-          if (dock.length >= 5) return false;
+        var front = trayCols[t].length && trayCols[t][0];
+        if (front && front.color === need) {
+          var isPair = front.link === front.idx + 1;
+          if (dock.length + (isPair ? 2 : 1) > 5) return false;
           dock.push(trayCols[t].shift());
+          if (isPair) dock.push(trayCols[t].shift()); // bağlı eş de biner
           found = true;
           break;
         }

@@ -31,6 +31,8 @@
     <canvas id="canvas"></canvas>
     <div id="track-chip">0/5</div>
 
+    <div id="speed-chip" class="hidden">⚡x1.5</div>
+
     <div id="overlay" class="hidden">
       <div id="overlay-card">
         <h1 id="overlay-title">Tebrikler!</h1>
@@ -42,9 +44,26 @@
         </div>
       </div>
     </div>
+
+    <div id="panel-profile" class="panel hidden">
+      <h2>👤 Profil</h2>
+      <div id="profile-body"></div>
+    </div>
+
+    <div id="panel-collection" class="panel hidden">
+      <h2>🎁 Koleksiyon</h2>
+      <p class="panel-sub">Her 10 seviyede yeni bir rozet açılır</p>
+      <div id="collection-grid"></div>
+    </div>
   </div>
 
-  <footer id="hint">Sıradaki rengin makarasını tepsiden yuvaya al — ip kendiliğinden sarılsın 🧶</footer>
+  <footer id="hint">Sıradaki rengin makarasını raya bindir — ip kendiliğinden sarılsın 🧶</footer>
+
+  <nav id="bottom-nav">
+    <button class="nav-btn active" data-panel="none">🧶<span>Oyun</span></button>
+    <button class="nav-btn" data-panel="profile">👤<span>Profil</span></button>
+    <button class="nav-btn" data-panel="collection">🎁<span>Koleksiyon</span></button>
+  </nav>
 </div>
 <script src="vendor/three.min.js"></script>
 <script src="logic.js"></script>
