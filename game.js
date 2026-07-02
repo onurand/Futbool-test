@@ -333,7 +333,8 @@
   function makeSpoolEntity(colorIdx, cap, x, y, scale) {
     var sp = {
       color: colorIdx, cap: cap, remaining: cap,
-      x: x, y: y, z: 1.2, scale: scale, rot: 0, shake: 0, state: 'tray'
+      x: x, y: y, z: 1.2, scale: scale, rot: 0, shake: 0, state: 'tray',
+      spinPhase: Math.random() * Math.PI * 2
     };
     sp.group = buildSpoolMesh(level.colors[colorIdx]);
     sp.badge = new THREE.Sprite(badgeSprite(cap, level.colors[colorIdx]));
@@ -350,7 +351,10 @@
     sp.group.position.set(wx(sp.x), wy(sp.y), sp.z);
     sp.group.scale.setScalar(Math.max(sp.scale, 0.0001) * 1.35);
     sp.group.rotation.z = (sp.rot || 0) + (sp.shake ? Math.sin(now * 40) * 0.16 * sp.shake : 0);
-    sp.group.rotation.y = sp === activeSpool ? now * 5 : 0; // saran makara döner
+    // raydaki TÜM makaralar döner; ip saran daha hızlı
+    sp.group.rotation.y = (sp.state === 'riding' || sp.state === 'boarding')
+      ? now * (sp === activeSpool ? 6 : 1.8) + (sp.spinPhase || 0)
+      : 0;
     var m = badgeSprite(sp.remaining, level.colors[sp.color]);
     if (sp.badge.material !== m) sp.badge.material = m;
     sp.badge.visible = sp.scale > 0.3 && sp.state !== 'completing';
@@ -715,6 +719,9 @@
         }
       }
     }
+
+    // konvoy bandı sürekli akar (sarma ilerledikçe ekstra hızlanır)
+    if (!won && !failed && convoy.length) railT += dt * 0.012;
 
     // konvoy: raydaki tüm makaralar birlikte ilerler
     convoy.forEach(function (sp, i) {
