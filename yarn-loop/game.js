@@ -18,13 +18,13 @@
   // ---------- yerleşim sabitleri (mantık düzlemi: 420x700) ----------
   var W = 420;
   var H = 700;
-  var BOARD = { x: 70, y: 96, w: 280, h: 280 };
+  var BOARD = { x: 64, y: 100, w: 292, h: 330 };
   var RAIL_PAD = 26;
-  var DOCK_Y = 478;
-  var DOCK_X = [66, 138, 210, 282, 354];
   var TRAY_Y = 606;
   var TRAY_X = [66, 138, 210, 282, 354];
   var STITCH_MS = 105;
+  var MAX_TRACK = 5;    // rayda aynı anda en fazla makara
+  var CONVOY_GAP = 0.085; // ray parametresinde makaralar arası boşluk
 
   var WS = 0.1; // dünya ölçeği: 1 mantık birimi = 0.1 dünya birimi
   function wx(x) { return (x - W / 2) * WS; }
@@ -36,8 +36,8 @@
   var cell = 0, boardX = 0, boardY = 0;
   var pos = 0;
   var trayCols = null;
-  var dock = [null, null, null, null, null];
-  var rider = null;
+  var convoy = [];      // raydaki makaralar (biniş sırasıyla)
+  var activeSpool = null; // şu an ip saran makara
   var railT = 0.62;
   var stitchTimer = 0;
   var won = false, failed = false;
@@ -207,17 +207,6 @@
     back.receiveShadow = true;
     staticGroup.add(back);
 
-    // yuva çukurları
-    DOCK_X.forEach(function (x) {
-      var slot = new THREE.Mesh(
-        new THREE.BoxGeometry(6.4, 6.8, 0.8),
-        mat('#3a3331', { roughness: 0.9 })
-      );
-      slot.position.set(wx(x), wy(DOCK_Y), -0.4);
-      slot.receiveShadow = true;
-      staticGroup.add(slot);
-    });
-
     // tepsi paneli
     var tray = new THREE.Mesh(
       new THREE.BoxGeometry((W - 48) * WS, 12.4, 1.2),
@@ -361,7 +350,7 @@
     sp.group.position.set(wx(sp.x), wy(sp.y), sp.z);
     sp.group.scale.setScalar(Math.max(sp.scale, 0.0001) * 1.35);
     sp.group.rotation.z = (sp.rot || 0) + (sp.shake ? Math.sin(now * 40) * 0.16 * sp.shake : 0);
-    sp.group.rotation.y = sp.state === 'riding' ? now * 5 : 0; // sararken kendi ekseninde döner
+    sp.group.rotation.y = sp === activeSpool ? now * 5 : 0; // saran makara döner
     var m = badgeSprite(sp.remaining, level.colors[sp.color]);
     if (sp.badge.material !== m) sp.badge.material = m;
     sp.badge.visible = sp.scale > 0.3 && sp.state !== 'completing';
@@ -380,20 +369,20 @@
       strandMesh.geometry.dispose();
       strandMesh = null;
     }
-    if (!rider || pos >= level.stream.length) return;
-    if (rider.state !== 'riding' && rider.state !== 'toRail') return;
+    if (!activeSpool || pos >= level.stream.length) return;
+    if (activeSpool.state !== 'riding') return;
     var st = level.stream[pos];
     var sx = boardX + st.c * cell + cell / 2;
     var sy = boardY + st.r * cell + cell / 2;
     var wob = Math.sin(now * 11) * 0.5;
     var curve = new THREE.CatmullRomCurve3([
       new THREE.Vector3(wx(sx), wy(sy), 0.7),
-      new THREE.Vector3((wx(sx) + wx(rider.x)) / 2 + wob, (wy(sy) + wy(rider.y)) / 2 - 1.6, 1.6),
-      new THREE.Vector3(wx(rider.x), wy(rider.y) + 0.6, rider.z)
+      new THREE.Vector3((wx(sx) + wx(activeSpool.x)) / 2 + wob, (wy(sy) + wy(activeSpool.y)) / 2 - 1.6, 1.6),
+      new THREE.Vector3(wx(activeSpool.x), wy(activeSpool.y) + 0.6, activeSpool.z)
     ]);
     strandMesh = new THREE.Mesh(
       new THREE.TubeGeometry(curve, 24, 0.16, 6, false),
-      mat(level.colors[rider.color], { roughness: 0.45 })
+      mat(level.colors[activeSpool.color], { roughness: 0.45 })
     );
     root.add(strandMesh);
   }
@@ -541,8 +530,8 @@
         return sp;
       });
     });
-    dock = [null, null, null, null, null];
-    rider = null;
+    convoy = [];
+    activeSpool = null;
     railT = 0.62;
     stitchTimer = 0;
     won = false; failed = false;
@@ -552,6 +541,7 @@
 
     buildStatics();
     buildStitches();
+    updateTrackChip();
     document.getElementById('level-label').textContent = 'Seviye ' + levelNum;
     document.getElementById('mistake-label').textContent = '';
     updateProgress();
@@ -561,13 +551,17 @@
   function neededColor() {
     return pos < level.stream.length ? level.stream[pos].color : -1;
   }
-  function matchingDockSpool() {
+  function matchingTrackSpool() {
     var need = neededColor();
     if (need < 0) return null;
-    for (var i = 0; i < 5; i++) {
-      if (dock[i] && dock[i].color === need && dock[i].remaining > 0) return dock[i];
+    for (var i = 0; i < convoy.length; i++) {
+      if (convoy[i].color === need && convoy[i].remaining > 0 && convoy[i].state !== 'completing') return convoy[i];
     }
     return null;
+  }
+  function updateTrackChip() {
+    var el = document.getElementById('track-chip');
+    if (el) el.textContent = convoy.length + '/' + MAX_TRACK;
   }
 
   // ---------- overlay & hud ----------
@@ -591,7 +585,7 @@
       success ? (stars() === 3 ? 'Mükemmel!' : 'Tebrikler!') : 'Tıkandın!';
     document.getElementById('overlay-sub').textContent = success
       ? 'Seviye ' + levelNum + ' tamamlandı — ' + level.name + ' söküldü'
-      : 'Yuvalar doldu, sıradaki renge uyan makara yok';
+      : 'Ray doldu (5/5), sıradaki renge uyan makara yok';
     document.getElementById('btn-next').style.display = success ? '' : 'none';
     document.getElementById('overlay').classList.remove('hidden');
   }
@@ -616,22 +610,21 @@
     if (won || failed) return false;
     var colArr = trayCols[colIdx];
     if (!colArr.length) return false;
-    var slot = dock.indexOf(null);
-    if (slot === -1) {
+    if (convoy.length >= MAX_TRACK) {
       colArr[0].shake = 1;
       sfx.blocked();
       return false;
     }
     var sp = colArr.shift();
-    dock[slot] = sp;
-    sp.slot = slot;
-    sp.state = 'docking';
+    convoy.push(sp);
+    sp.state = 'boarding';
     sfx.dockIn();
-    maxDockUsed = Math.max(maxDockUsed, dock.filter(Boolean).length);
+    maxDockUsed = Math.max(maxDockUsed, convoy.length);
+    updateTrackChip();
+    var p = railPoint(railT - CONVOY_GAP * (convoy.length - 1));
     cancelTweens(sp);
-    tween(sp, { x: DOCK_X[slot], y: DOCK_Y, scale: 0.9, z: 1.2 }, 0.42, easeOutBack, function () {
-      sp.state = 'docked';
-      tween(sp, { scale: 0.8 }, 0.15, easeOutCubic);
+    tween(sp, { x: p.x, y: p.y, scale: 0.92, z: 2.2 }, 0.45, easeOutBack, function () {
+      sp.state = 'riding';
     });
     colArr.forEach(function (b, ri) {
       cancelTweens(b);
@@ -655,31 +648,11 @@
   document.getElementById('btn-replay').addEventListener('click', function () { ensureAudio(); loadLevel(levelNum); });
 
   // ---------- oyun akışı ----------
-  function setRider(sp) {
-    if (rider === sp) return;
-    if (rider && rider.state === 'riding' && dock[rider.slot] === rider) {
-      var old = rider;
-      old.state = 'docking';
-      cancelTweens(old);
-      tween(old, { x: DOCK_X[old.slot], y: DOCK_Y, scale: 0.8, rot: 0, z: 1.2 }, 0.35, easeOutCubic, function () {
-        old.state = 'docked';
-      });
-    }
-    rider = sp;
-    if (sp) {
-      sp.state = 'toRail';
-      var p = railPoint(railT);
-      cancelTweens(sp);
-      tween(sp, { x: p.x, y: p.y, scale: 0.95, z: 2.2 }, 0.35, easeOutBack, function () {
-        sp.state = 'riding';
-      });
-    }
-  }
-
   function completeSpool(sp) {
-    dock[sp.slot] = null;
-    if (rider === sp) rider = null;
+    convoy = convoy.filter(function (s) { return s !== sp; });
+    if (activeSpool === sp) activeSpool = null;
     sp.state = 'completing';
+    updateTrackChip();
     spawnSparkle(sp.x, sp.y);
     sfx.complete();
     cancelTweens(sp);
@@ -702,40 +675,35 @@
         spawnConfetti();
         setTimeout(function () { showOverlay(true); }, 800);
       } else {
-        var spool = matchingDockSpool();
+        var spool = matchingTrackSpool();
+        activeSpool = spool && spool.state === 'riding' ? spool : null;
         if (spool) {
           stalledSince = 0;
-          if (rider !== spool) setRider(spool);
-          if (spool.state === 'riding') {
+          if (activeSpool) {
             stitchTimer += dt * 1000;
             while (stitchTimer >= STITCH_MS && pos < level.stream.length) {
               var st = level.stream[pos];
-              if (st.color !== spool.color || spool.remaining === 0) break;
+              if (st.color !== activeSpool.color || activeSpool.remaining === 0) break;
               stitchTimer -= STITCH_MS;
               alive[st.r][st.c] = false;
               hideStitch(st.c, st.r);
-              spool.remaining--;
+              activeSpool.remaining--;
               pos++;
               updateProgress();
               sfx.stitch();
-              spawnFlyer(st, spool);
+              spawnFlyer(st, activeSpool);
               railT += 0.011;
-              if (spool.remaining === 0) {
-                completeSpool(spool);
+              if (activeSpool.remaining === 0) {
+                completeSpool(activeSpool);
                 break;
               }
-              if (pos < level.stream.length && level.stream[pos].color !== spool.color) break;
-            }
-            if (spool.state === 'riding') {
-              var rp = railPoint(railT);
-              spool.x += (rp.x - spool.x) * Math.min(dt * 8, 1);
-              spool.y += (rp.y + Math.sin(now * 9) * 2 - spool.y) * Math.min(dt * 8, 1);
+              // renk değişince sarmayı raydaki diğer makara ANINDA devralır
+              if (pos < level.stream.length && level.stream[pos].color !== activeSpool.color) break;
             }
           }
         } else {
           stitchTimer = 0;
-          if (rider) setRider(null);
-          if (dock.every(function (d) { return d !== null; })) {
+          if (convoy.length >= MAX_TRACK) {
             stalledSince += dt;
             if (stalledSince > 0.9) {
               failed = true;
@@ -748,9 +716,18 @@
       }
     }
 
+    // konvoy: raydaki tüm makaralar birlikte ilerler
+    convoy.forEach(function (sp, i) {
+      if (sp.state !== 'riding') return;
+      var p = railPoint(railT - CONVOY_GAP * i);
+      var bob = sp === activeSpool ? Math.sin(now * 9) * 2 : 0;
+      sp.x += (p.x - sp.x) * Math.min(dt * 8, 1);
+      sp.y += (p.y + bob - sp.y) * Math.min(dt * 8, 1);
+    });
+
     // ipucu: gereken tepsi makarası nabız atar
     var need = neededColor();
-    var wantHint = !matchingDockSpool() && !won && !failed;
+    var wantHint = !matchingTrackSpool() && !won && !failed;
     trayCols.forEach(function (colArr) {
       if (colArr.length && colArr[0].state === 'tray') {
         var front = colArr[0];
@@ -781,13 +758,13 @@
   window.__yarn = {
     getLevel: function () { return level; },
     getPos: function () { return pos; },
-    getDock: function () { return dock; },
+    getConvoy: function () { return convoy; },
     getTray: function () { return trayCols; },
     neededColor: neededColor,
     tapTray: tapTray,
     isWon: function () { return won; },
     isFailed: function () { return failed; },
-    isFlowing: function () { return !!matchingDockSpool(); },
+    isFlowing: function () { return !!matchingTrackSpool(); },
     loadLevel: loadLevel
   };
 
