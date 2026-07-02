@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Yarn Loop</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="game">
+  <header id="hud">
+    <button id="btn-prev" class="icon-btn" title="Önceki seviye">‹</button>
+    <div id="hud-center">
+      <div id="level-label">Seviye 1</div>
+      <div id="mistake-label"></div>
+    </div>
+    <button id="btn-restart" class="icon-btn" title="Yeniden başlat">⟳</button>
+  </header>
+
+  <div id="stage">
+    <canvas id="canvas"></canvas>
+
+    <div id="overlay" class="hidden">
+      <div id="overlay-card">
+        <h1 id="overlay-title">Tebrikler!</h1>
+        <div id="overlay-stars"></div>
+        <p id="overlay-sub"></p>
+        <div id="overlay-buttons">
+          <button id="btn-replay" class="btn secondary">Tekrar Oyna</button>
+          <button id="btn-next" class="btn primary">Sonraki Seviye ›</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer id="hint">Üstte kalan ipi bul, dokun ve yumağa sar 🧶</footer>
+</div>
+<script src="game.js"></script>
+</body>
+</html>
