@@ -1,10 +1,12 @@
 /* Yarn Loop service worker — cache-first, so the game works fully offline. */
-var CACHE = 'yarnloop-v4';
+var CACHE = 'yarnloop-v5';
 var ASSETS = [
   './',
   './index.html',
   './style.css',
   './game.js',
+  './logic.js',
+  './vendor/three.min.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',

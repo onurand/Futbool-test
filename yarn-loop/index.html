@@ -25,6 +25,8 @@
     <button id="btn-restart" class="icon-btn" title="Yeniden başlat">⟳</button>
   </header>
 
+  <div id="progress"><div id="progress-fill"></div><span id="progress-text"></span></div>
+
   <div id="stage">
     <canvas id="canvas"></canvas>
 
@@ -43,6 +45,8 @@
 
   <footer id="hint">Sıradaki rengin makarasını tepsiden yuvaya al — ip kendiliğinden sarılsın 🧶</footer>
 </div>
+<script src="vendor/three.min.js"></script>
+<script src="logic.js"></script>
 <script src="game.js"></script>
 <script>
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
