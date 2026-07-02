@@ -1,5 +1,5 @@
 /* Yarn Loop service worker — cache-first, so the game works fully offline. */
-var CACHE = 'yarnloop-v1';
+var CACHE = 'yarnloop-v2';
 var ASSETS = [
   './',
   './index.html',
