@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: write
+  pages: write
 
 concurrency:
   group: pages
@@ -28,3 +29,27 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./yarn-loop
           commit_message: "Deploy Yarn Loop"
+
+      - name: Enable Pages (source gh-pages branch, idempotent)
+        run: |
+          code=$(curl -sS -o /tmp/pages.json -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pages" \
+            -d '{"source":{"branch":"gh-pages","path":"/"}}')
+          echo "Pages API: HTTP $code"
+          cat /tmp/pages.json
+          # 201 = yeni açıldı, 409 = zaten açık; ikisi de tamam
+          [ "$code" = "201" ] || [ "$code" = "409" ]
+
+      - name: Wait until the site is live
+        run: |
+          url="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
+          for i in $(seq 1 30); do
+            status=$(curl -s -o /dev/null -w "%{http_code}" "$url")
+            echo "deneme $i: $url -> HTTP $status"
+            [ "$status" = "200" ] && exit 0
+            sleep 10
+          done
+          echo "Site 5 dakika içinde canlıya çıkmadı" >&2
+          exit 1
