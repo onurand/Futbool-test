@@ -39,8 +39,12 @@ jobs:
             -d '{"source":{"branch":"gh-pages","path":"/"}}')
           echo "Pages API: HTTP $code"
           cat /tmp/pages.json
-          # 201 = yeni açıldı, 409 = zaten açık; ikisi de tamam
-          [ "$code" = "201" ] || [ "$code" = "409" ]
+          # 201 = yeni açıldı, 409 = zaten açık. GITHUB_TOKEN'ın site oluşturma
+          # yetkisi yok (403) — o durumda uyar ama işi kırma; asıl kontrol
+          # bir sonraki "site canlı mı" adımında.
+          if [ "$code" != "201" ] && [ "$code" != "409" ]; then
+            echo "::warning::Pages otomatik açılamadı (HTTP $code). Bir kez elle açın: Settings → Pages → Source: Deploy from a branch → gh-pages / (root)"
+          fi
 
       - name: Wait until the site is live
         run: |
