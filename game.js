@@ -1,34 +1,112 @@
 /*
- * Yarn Loop — hyper-casual yarn untangle clone.
+ * Yarn Loop — knit-puzzle clone (Combo Games'in Yarn Loop / Yarn Flow
+ * oyununun mekaniği).
  *
- * Mechanic: colored yarn loops are stretched around pins, stacked on top of
- * each other. A loop can only be unwound (tap it) when no loop above it
- * crosses it or shares a pin with it. Unwound yarn flies onto the ball at
- * the bottom. Clear every loop to finish the level.
+ * Mekanik: tahtada örgü ilmeklerinden (V dikişler) oluşan renkli bir desen
+ * var. Bir ilmek ancak ÜSTÜNDEKİ hücre boşsa sökülebilir (örgü yukarıdan
+ * sökülür). Alttaki konveyörde renkli, kapasiteli bobinler sırada bekler.
+ * Bir bobine dokununca kendi rengindeki açık ilmekleri tek tek toplar;
+ * her ilmek kapasitesini 1 azaltır. Kapasitesi biten bobin tamamlanır ve
+ * uçar gider. Toplayacak ilmeği kalmayan ama kapasitesi artan bobin ASKIYA
+ * (rack, 3 slot) alınır ve sonra tekrar kullanılabilir. Askı doluyken bir
+ * bobin daha askıya çıkmak zorunda kalırsa ya da hiçbir bobin ilerleme
+ * yapamazsa seviye tıkanır. Deseni tamamen sökünce seviye biter.
  *
- * Levels are procedurally generated from a seeded RNG, so level N is the
- * same for everyone. Because blocking follows a total z-order, the topmost
- * remaining loop is always removable — every level is solvable.
+ * Seviyeler seed'li RNG ile deterministik üretilir. Bobin kapasiteleri,
+ * desen sanal olarak sökülerek belirlenir: konveyör sırasını takip eden
+ * oyuncu her bobini tam doldurur — yani her seviyenin garantili çözümü
+ * vardır; askı, sıradan sapan oyuncunun emniyet alanıdır.
  */
 (function () {
   'use strict';
 
-  // ---------- constants ----------
+  // ---------- sabitler ----------
   var W = 420;
   var H = 700;
-  var YARN_WIDTH = 10;
-  var HIT_SLACK = 15;
-  var PIN_BASE_RADIUS = 13; // innermost wrap radius around a pin
-  var PIN_STACK_STEP = 6.5; // extra radius per loop stacked on the same pin
-  var BALL = { x: W / 2, y: 608 };
-  var BALL_BASE_R = 20;
+  var BOARD = { x: 40, y: 96, w: 340, h: 336 }; // örgü alanı
+  var RACK_Y = 500;
+  var BELT_Y = 596;
+  var SLOT_X = [105, 210, 315]; // konveyörde görünen 3 bobin
+  var RACK_X = [105, 210, 315];
+  var COLLECT_MS = 95; // ilmek başına toplama süresi
 
   var PALETTE = [
     '#e5484d', '#f76b15', '#ffc53d', '#46a758', '#00a2c7',
-    '#3e63dd', '#8e4ec6', '#e93d82', '#12a594', '#ad7f58', '#687076'
+    '#3e63dd', '#8e4ec6', '#e93d82', '#12a594'
   ];
 
-  // ---------- small math helpers ----------
+  // Örgü desen kalıpları (X = ilmek)
+  var MASKS = [
+    [ // kalp
+      '.XX.XX.',
+      'XXXXXXX',
+      'XXXXXXX',
+      '.XXXXX.',
+      '..XXX..',
+      '...X...'
+    ],
+    [ // yıldız
+      '....X....',
+      '...XXX...',
+      'XXXXXXXXX',
+      '.XXXXXXX.',
+      '..XXXXX..',
+      '.XXX.XXX.',
+      'XX.....XX'
+    ],
+    [ // balık
+      '..XXXX...',
+      '.XXXXXX.X',
+      'XXXXXXXXX',
+      '.XXXXXX.X',
+      '..XXXX...'
+    ],
+    [ // ev
+      '...XX...',
+      '..XXXX..',
+      '.XXXXXX.',
+      'XXXXXXXX',
+      '.XX..XX.',
+      '.XX..XX.'
+    ],
+    [ // kelebek
+      'XX.....XX',
+      'XXX...XXX',
+      'XXXX.XXXX',
+      '.XXXXXXX.',
+      'XXXX.XXXX',
+      'XXX...XXX',
+      'XX.....XX'
+    ],
+    [ // kupa
+      '.XXXXXX..',
+      '.XXXXXXX.',
+      '.XXXXXX.X',
+      '.XXXXXXX.',
+      '.XXXXXX..',
+      '..XXXX...'
+    ],
+    [ // ağaç
+      '...XX...',
+      '..XXXX..',
+      '.XXXXXX.',
+      'XXXXXXXX',
+      '..XXXX..',
+      '.XXXXXX.',
+      'XXXXXXXX',
+      '...XX...'
+    ],
+    [ // kare battaniye
+      'XXXXXXXX',
+      'XXXXXXXX',
+      'XXXXXXXX',
+      'XXXXXXXX',
+      'XXXXXXXX',
+      'XXXXXXXX'
+    ]
+  ];
+
+  // ---------- yardımcılar ----------
   function mulberry32(seed) {
     var a = seed >>> 0;
     return function () {
@@ -39,79 +117,7 @@
     };
   }
 
-  function dist(a, b) {
-    var dx = a.x - b.x, dy = a.y - b.y;
-    return Math.sqrt(dx * dx + dy * dy);
-  }
-
-  function lerp(a, b, t) {
-    return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-  }
-
-  // point on segment [v -> to] at distance d from v
-  function toward(v, to, d) {
-    var L = dist(v, to) || 1;
-    return { x: v.x + (to.x - v.x) / L * d, y: v.y + (to.y - v.y) / L * d };
-  }
-
-  function quadPoint(p0, c, p1, t) {
-    var u = 1 - t;
-    return {
-      x: u * u * p0.x + 2 * u * t * c.x + t * t * p1.x,
-      y: u * u * p0.y + 2 * u * t * c.y + t * t * p1.y
-    };
-  }
-
-  function cross(o, a, b) {
-    return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
-  }
-
-  function segIntersect(a, b, c, d) {
-    var d1 = cross(a, b, c), d2 = cross(a, b, d);
-    var d3 = cross(c, d, a), d4 = cross(c, d, b);
-    return (d1 > 0) !== (d2 > 0) && (d3 > 0) !== (d4 > 0);
-  }
-
-  function pointSegDist(p, a, b) {
-    var dx = b.x - a.x, dy = b.y - a.y;
-    var len2 = dx * dx + dy * dy;
-    var t = len2 === 0 ? 0 : ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
-    t = Math.max(0, Math.min(1, t));
-    var q = { x: a.x + dx * t, y: a.y + dy * t };
-    return dist(p, q);
-  }
-
-  // Andrew's monotone chain — returns hull points in CCW order
-  function convexHull(points) {
-    var pts = points.slice().sort(function (p, q) {
-      return p.x === q.x ? p.y - q.y : p.x - q.x;
-    });
-    if (pts.length < 3) return pts;
-    var lower = [], upper = [], i;
-    for (i = 0; i < pts.length; i++) {
-      while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], pts[i]) <= 0) lower.pop();
-      lower.push(pts[i]);
-    }
-    for (i = pts.length - 1; i >= 0; i--) {
-      while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], pts[i]) <= 0) upper.pop();
-      upper.push(pts[i]);
-    }
-    lower.pop();
-    upper.pop();
-    return lower.concat(upper);
-  }
-
-  function polygonArea(pts) {
-    var s = 0;
-    for (var i = 0; i < pts.length; i++) {
-      var a = pts[i], b = pts[(i + 1) % pts.length];
-      s += a.x * b.y - b.x * a.y;
-    }
-    return Math.abs(s) / 2;
-  }
-
   function shadeColor(hex, amt) {
-    // amt > 0 lightens toward white, amt < 0 darkens toward black
     var n = parseInt(hex.slice(1), 16);
     var r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
     var target = amt > 0 ? 255 : 0;
@@ -122,196 +128,129 @@
     return 'rgb(' + r + ',' + g + ',' + b + ')';
   }
 
-  // ---------- level generation ----------
+  function cloneGrid(g) {
+    return g.map(function (row) { return row.slice(); });
+  }
+
+  // ---------- seviye üretimi ----------
   function generateLevel(n) {
-    var rnd = mulberry32(n * 7919 + 12345);
-    var pinCount = Math.min(5 + Math.floor((n - 1) / 2), 11);
-    var loopCount = Math.min(2 + Math.floor((n - 1) * 0.85), 11);
+    var rnd = mulberry32(n * 7919 + 613);
+    var mask = MASKS[Math.floor(rnd() * MASKS.length)];
+    var rows = mask.length, cols = mask[0].length;
+    var colorCount = Math.min(3 + Math.floor((n - 1) / 3), 7);
 
-    // scatter pins with a minimum spacing (relaxes if space runs out)
-    var pins = [];
-    var minD = 82;
-    var guard = 0;
-    while (pins.length < pinCount && guard < 6000) {
-      guard++;
-      if (guard % 600 === 0) minD *= 0.92;
-      var p = { x: 55 + rnd() * (W - 110), y: 130 + rnd() * 360 };
-      var ok = true;
-      for (var i = 0; i < pins.length; i++) {
-        if (dist(p, pins[i]) < minD) { ok = false; break; }
-      }
-      if (ok) pins.push(p);
-    }
-
+    // renkleri karıştırıp ilk colorCount tanesini kullan
     var colors = PALETTE.slice();
-    for (var c = colors.length - 1; c > 0; c--) {
-      var j = Math.floor(rnd() * (c + 1));
-      var tmp = colors[c]; colors[c] = colors[j]; colors[j] = tmp;
+    for (var i = colors.length - 1; i > 0; i--) {
+      var j = Math.floor(rnd() * (i + 1));
+      var tmp = colors[i]; colors[i] = colors[j]; colors[j] = tmp;
     }
+    colors = colors.slice(0, colorCount);
 
-    var loops = [];
-    var tries = 0;
-    while (loops.length < loopCount && tries < 400) {
-      tries++;
-      var size = 3;
-      if (rnd() < Math.min(0.15 + n * 0.03, 0.5)) size = 4;
-      if (n > 8 && rnd() < 0.2) size = 5;
-      size = Math.min(size, pins.length);
-
-      // pick `size` distinct pins
-      var idx = [];
-      var pool = pins.map(function (_, k) { return k; });
-      for (var s = 0; s < size; s++) {
-        idx.push(pool.splice(Math.floor(rnd() * pool.length), 1)[0]);
+    // hücrelere rastgele renk, sonra komşu çoğunluğuyla yumuşatma
+    // (örgüdeki renk blokları gibi kümeler oluşsun)
+    var grid = [];
+    for (var r = 0; r < rows; r++) {
+      grid.push([]);
+      for (var c = 0; c < cols; c++) {
+        grid[r].push(mask[r][c] === 'X' ? Math.floor(rnd() * colorCount) : -1);
       }
-
-      var hull = convexHull(idx.map(function (k) { return { x: pins[k].x, y: pins[k].y, idx: k }; }));
-      if (hull.length < 3) continue;
-      if (polygonArea(hull) < 4000) continue;
-
-      loops.push({
-        pinIdx: hull.map(function (h) { return h.idx; }),
-        color: colors[loops.length % colors.length],
-        z: loops.length // reassigned below
-      });
     }
-
-    // random z-order (draw order & blocking order)
-    var order = loops.map(function (_, k) { return k; });
-    for (var o = order.length - 1; o > 0; o--) {
-      var r = Math.floor(rnd() * (o + 1));
-      var t2 = order[o]; order[o] = order[r]; order[r] = t2;
-    }
-    order.forEach(function (loopIdx, z) { loops[loopIdx].z = z; });
-
-    return { n: n, pins: pins, loops: loops };
-  }
-
-  // ---------- geometry: sampled outlines, stacking, overlaps ----------
-  function buildGeometry(level) {
-    var pins = level.pins;
-
-    // loops sharing a pin stack outward by z: higher z sits outside (on top)
-    var stacks = pins.map(function () { return []; });
-    level.loops.forEach(function (loop, li) {
-      loop.id = li;
-      loop.pinIdx.forEach(function (pi) { stacks[pi].push(loop); });
-    });
-    stacks.forEach(function (st) {
-      st.sort(function (a, b) { return a.z - b.z; });
-    });
-
-    level.loops.forEach(function (loop) {
-      var vs = loop.pinIdx.map(function (pi) { return pins[pi]; });
-      var k = vs.length;
-
-      var radii = loop.pinIdx.map(function (pi) {
-        var stackIdx = stacks[pi].indexOf(loop);
-        return PIN_BASE_RADIUS + stackIdx * PIN_STACK_STEP;
-      });
-
-      var corners = vs.map(function (v, i) {
-        var prev = vs[(i - 1 + k) % k];
-        var next = vs[(i + 1) % k];
-        var r = Math.min(radii[i], dist(v, prev) * 0.42, dist(v, next) * 0.42, 36);
-        return { v: v, pIn: toward(v, prev, r), pOut: toward(v, next, r) };
-      });
-
-      // sample a closed polyline: rounded corner then straight edge, repeat
-      var pts = [];
-      for (var i = 0; i < k; i++) {
-        var a = corners[i], b = corners[(i + 1) % k];
-        for (var q = 0; q <= 10; q++) {
-          pts.push(quadPoint(a.pIn, a.v, a.pOut, q / 10));
-        }
-        var edgeLen = dist(a.pOut, b.pIn);
-        var steps = Math.max(1, Math.floor(edgeLen / 12));
-        for (var e = 1; e <= steps; e++) {
-          pts.push(lerp(a.pOut, b.pIn, e / steps));
+    for (var pass = 0; pass < 2; pass++) {
+      var next = cloneGrid(grid);
+      for (r = 0; r < rows; r++) {
+        for (c = 0; c < cols; c++) {
+          if (grid[r][c] < 0) continue;
+          var votes = {};
+          [[0, -1], [0, 1], [-1, 0], [1, 0]].forEach(function (d) {
+            var rr = r + d[1], cc = c + d[0];
+            if (rr >= 0 && rr < rows && cc >= 0 && cc < cols && grid[rr][cc] >= 0) {
+              votes[grid[rr][cc]] = (votes[grid[rr][cc]] || 0) + 1;
+            }
+          });
+          var best = grid[r][c], bestN = 1;
+          Object.keys(votes).forEach(function (k) {
+            if (votes[k] > bestN + (rnd() < 0.5 ? 0 : 1)) { best = +k; bestN = votes[k]; }
+          });
+          next[r][c] = best;
         }
       }
-      loop.pts = pts;
+      grid = next;
+    }
 
-      var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      pts.forEach(function (p) {
-        if (p.x < minX) minX = p.x;
-        if (p.y < minY) minY = p.y;
-        if (p.x > maxX) maxX = p.x;
-        if (p.y > maxY) maxY = p.y;
-      });
-      loop.bbox = { minX: minX, minY: minY, maxX: maxX, maxY: maxY };
-
-      loop.state = 'alive';
-      loop.rt = 0;        // unwind progress (index into pts)
-      loop.shakeT = 0;
-      loop.flashT = 0;
-      loop.dashOffset = Math.floor(dist(pts[0], BALL)) % 16;
-    });
-
-    // pairwise overlap: crossing outlines OR sharing a pin
-    var L = level.loops;
-    var overlap = L.map(function () { return L.map(function () { return false; }); });
-    for (var x = 0; x < L.length; x++) {
-      for (var y = x + 1; y < L.length; y++) {
-        overlap[x][y] = overlap[y][x] = loopsOverlap(L[x], L[y]);
+    // bobinleri, deseni sanal sökerek üret → çözüm sırası garanti
+    var sim = cloneGrid(grid);
+    var bobbins = [];
+    var capMin = 3, capMax = Math.min(5 + Math.floor(n / 2), 10);
+    var safety = 500;
+    while (safety-- > 0) {
+      var exposedByColor = {};
+      var remaining = 0;
+      for (r = 0; r < rows; r++) {
+        for (c = 0; c < cols; c++) {
+          if (sim[r][c] < 0) continue;
+          remaining++;
+          if (r === 0 || sim[r - 1][c] < 0) {
+            (exposedByColor[sim[r][c]] = exposedByColor[sim[r][c]] || []).push([c, r]);
+          }
+        }
       }
-    }
-    level.overlap = overlap;
-    return level;
-  }
-
-  function loopsOverlap(a, b) {
-    for (var i = 0; i < a.pinIdx.length; i++) {
-      if (b.pinIdx.indexOf(a.pinIdx[i]) !== -1) return true;
-    }
-    if (a.bbox.maxX < b.bbox.minX || b.bbox.maxX < a.bbox.minX ||
-        a.bbox.maxY < b.bbox.minY || b.bbox.maxY < a.bbox.minY) return false;
-    var pa = a.pts, pb = b.pts;
-    for (var s = 0; s < pa.length; s++) {
-      var a1 = pa[s], a2 = pa[(s + 1) % pa.length];
-      for (var t = 0; t < pb.length; t++) {
-        if (segIntersect(a1, a2, pb[t], pb[(t + 1) % pb.length])) return true;
+      if (remaining === 0) break;
+      var avail = Object.keys(exposedByColor);
+      var color = +avail[Math.floor(rnd() * avail.length)];
+      var cap = capMin + Math.floor(rnd() * (capMax - capMin + 1));
+      var collected = 0;
+      // zincirleme topla: her sökümden sonra açığa çıkanlar da dahil
+      while (collected < cap) {
+        var found = null;
+        outer:
+        for (r = 0; r < rows; r++) {
+          for (c = 0; c < cols; c++) {
+            if (sim[r][c] === color && (r === 0 || sim[r - 1][c] < 0)) { found = [c, r]; break outer; }
+          }
+        }
+        if (!found) break;
+        sim[found[1]][found[0]] = -1;
+        collected++;
       }
+      if (collected > 0) bobbins.push({ color: color, cap: collected });
     }
-    return false;
+
+    return { n: n, rows: rows, cols: cols, grid: grid, colors: colors, bobbins: bobbins };
   }
 
-  function blockersOf(level, loop) {
-    return level.loops.filter(function (m) {
-      return m !== loop && m.state === 'alive' && m.z > loop.z && level.overlap[loop.id][m.id];
-    });
-  }
-
-  // greedy solver used by the node smoke test
+  // node smoke testi: konveyör sırası takip edilince seviye biter mi?
   function solveCheck(level) {
-    var alive = level.loops.slice();
-    var removedTotal = 0;
-    while (alive.length) {
-      var removable = alive.filter(function (l) {
-        return alive.every(function (m) {
-          return m === l || m.z < l.z || !level.overlap[l.id][m.id];
-        });
-      });
-      if (!removable.length) return false;
-      alive = alive.filter(function (l) { return removable.indexOf(l) === -1; });
-      removedTotal += removable.length;
+    var sim = cloneGrid(level.grid);
+    var rows = level.rows, cols = level.cols;
+    for (var b = 0; b < level.bobbins.length; b++) {
+      var bob = level.bobbins[b];
+      var left = bob.cap;
+      while (left > 0) {
+        var found = null;
+        for (var r = 0; r < rows && !found; r++) {
+          for (var c = 0; c < cols && !found; c++) {
+            if (sim[r][c] === bob.color && (r === 0 || sim[r - 1][c] < 0)) found = [c, r];
+          }
+        }
+        if (!found) return false; // sırayı izleyen bobin tam dolmalı
+        sim[found[1]][found[0]] = -1;
+        left--;
+      }
     }
-    return removedTotal === level.loops.length;
+    for (r = 0; r < rows; r++) {
+      for (c = 0; c < cols; c++) if (sim[r][c] >= 0) return false;
+    }
+    return true;
   }
 
-  // ---------- node export (logic smoke tests without a browser) ----------
   if (typeof window === 'undefined') {
-    module.exports = {
-      generateLevel: generateLevel,
-      buildGeometry: buildGeometry,
-      solveCheck: solveCheck,
-      blockersOf: blockersOf
-    };
+    module.exports = { generateLevel: generateLevel, solveCheck: solveCheck };
     return;
   }
 
   // =====================================================================
-  //                            BROWSER GAME
+  //                              TARAYICI
   // =====================================================================
   var canvas = document.getElementById('canvas');
   var ctx = canvas.getContext('2d');
@@ -320,15 +259,20 @@
   if (!(levelNum >= 1)) levelNum = 1;
 
   var level = null;
-  var mistakes = 0;
-  var collected = [];       // colors wound onto the ball, in order
-  var ballPulse = 0;
-  var ballSpin = 0;
+  var grid = null;          // canlı ızgara (renk idx | -1)
+  var cell = 0, boardX = 0, boardY = 0;
+  var totalStitches = 0;
+  var queue = [];           // konveyördeki bobinler (obje listesi)
+  var rack = [null, null, null];
+  var active = null;        // şu an toplama yapan bobin
+  var collectTimer = 0;
+  var flyers = [];          // uçan ilmekler
+  var movers = [];          // yer değiştiren bobin animasyonları
   var confetti = [];
-  var won = false;
+  var won = false, failed = false, busy = false;
+  var rackMaxUsed = 0;
   var lastTime = 0;
 
-  // ---------- sizing ----------
   function resize() {
     var maxW = Math.min(window.innerWidth * 0.94, 420);
     var maxH = window.innerHeight - 150;
@@ -343,7 +287,7 @@
   window.addEventListener('resize', resize);
   resize();
 
-  // ---------- audio (tiny synth, no assets) ----------
+  // ---------- ses ----------
   var audioCtx = null;
   function ensureAudio() {
     if (!audioCtx) {
@@ -352,7 +296,6 @@
     }
     if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
   }
-
   function beep(freq, endFreq, dur, type, vol, delay) {
     if (!audioCtx) return;
     var t0 = audioCtx.currentTime + (delay || 0);
@@ -367,65 +310,178 @@
     osc.start(t0);
     osc.stop(t0 + dur + 0.02);
   }
-
+  var chain = 0;
   var sfx = {
-    pop: function () { beep(520, 940, 0.16, 'triangle', 0.25); },
-    wind: function () { beep(300, 480, 0.4, 'sine', 0.08); },
-    blocked: function () { beep(160, 110, 0.18, 'sawtooth', 0.12); },
+    stitch: function () { chain++; beep(420 + chain * 45, 620 + chain * 45, 0.09, 'triangle', 0.18); },
+    complete: function () { beep(500, 1000, 0.25, 'triangle', 0.22); },
+    toRack: function () { beep(340, 250, 0.16, 'sine', 0.15); },
+    blocked: function () { beep(150, 110, 0.16, 'sawtooth', 0.12); },
+    fail: function () { beep(220, 90, 0.5, 'sawtooth', 0.16); },
     win: function () {
-      [523, 659, 784, 1047].forEach(function (f, i) {
-        beep(f, f, 0.22, 'triangle', 0.2, i * 0.12);
-      });
+      [523, 659, 784, 1047].forEach(function (f, i) { beep(f, f, 0.22, 'triangle', 0.2, i * 0.12); });
     }
   };
 
-  // ---------- level lifecycle ----------
+  // ---------- seviye yaşam döngüsü ----------
   function loadLevel(n) {
     levelNum = Math.max(1, n);
     localStorage.setItem('yarnloop.level', String(levelNum));
-    level = buildGeometry(generateLevel(levelNum));
-    mistakes = 0;
-    collected = [];
-    ballPulse = 0;
+    level = generateLevel(levelNum);
+    grid = cloneGrid(level.grid);
+    cell = Math.min(BOARD.w / level.cols, BOARD.h / level.rows, 42);
+    boardX = W / 2 - level.cols * cell / 2;
+    boardY = BOARD.y + (BOARD.h - level.rows * cell) / 2;
+    totalStitches = 0;
+    for (var r = 0; r < level.rows; r++) {
+      for (var c = 0; c < level.cols; c++) if (grid[r][c] >= 0) totalStitches++;
+    }
+    queue = level.bobbins.map(function (b, i) {
+      return {
+        color: b.color, cap: b.cap, remaining: b.cap, display: b.cap,
+        id: i, x: 0, y: BELT_Y, scale: 1, state: 'queued' // queued|active|racked|leaving|gone
+      };
+    });
+    rack = [null, null, null];
+    active = null;
+    flyers = [];
+    movers = [];
     confetti = [];
-    won = false;
+    won = false; failed = false; busy = false;
+    rackMaxUsed = 0;
+    chain = 0;
+    layoutBelt(true);
     document.getElementById('level-label').textContent = 'Seviye ' + levelNum;
-    updateMistakeLabel();
+    document.getElementById('mistake-label').textContent = '';
     hideOverlay();
   }
 
-  function updateMistakeLabel() {
-    var el = document.getElementById('mistake-label');
-    el.textContent = mistakes === 0 ? '' : '✖ ' + mistakes + ' hatalı dokunuş';
+  function visibleQueue() {
+    return queue.filter(function (b) { return b.state === 'queued'; }).slice(0, 3);
   }
 
-  function starsForMistakes(m) {
-    return m === 0 ? 3 : (m <= 2 ? 2 : 1);
+  function layoutBelt(instant) {
+    visibleQueue().forEach(function (b, i) {
+      b.tx = SLOT_X[i];
+      b.ty = BELT_Y;
+      if (instant) { b.x = b.tx; b.y = b.ty; }
+    });
   }
 
-  function showOverlay() {
-    var stars = starsForMistakes(mistakes);
+  // ---------- oyun kuralları ----------
+  function exposedCellOf(color) {
+    for (var r = 0; r < level.rows; r++) {
+      for (var c = 0; c < level.cols; c++) {
+        if (grid[r][c] === color && (r === 0 || grid[r - 1][c] < 0)) return [c, r];
+      }
+    }
+    return null;
+  }
+
+  function clearedCount() {
+    var left = 0;
+    for (var r = 0; r < level.rows; r++) {
+      for (var c = 0; c < level.cols; c++) if (grid[r][c] >= 0) left++;
+    }
+    return totalStitches - left;
+  }
+
+  function startBobbin(bob) {
+    if (busy || won || failed) return;
+    if (!exposedCellOf(bob.color)) { // şu an toplayacak ilmeği yok
+      bob.shakeT = 1;
+      sfx.blocked();
+      return;
+    }
+    if (bob.state === 'racked') {
+      rack[rack.indexOf(bob)] = null;
+    }
+    bob.state = 'active';
+    active = bob;
+    busy = true;
+    chain = 0;
+    collectTimer = 0;
+    bob.tx = W / 2; bob.ty = BELT_Y - 46; // sahneye çık
+  }
+
+  function finishActive() {
+    var bob = active;
+    active = null;
+    if (bob.remaining === 0) {
+      bob.state = 'leaving';
+      sfx.complete();
+      setTimeout(function () {
+        bob.state = 'gone';
+        layoutBelt(false);
+        settle();
+      }, 350);
+    } else {
+      var slot = rack.indexOf(null);
+      if (slot === -1) {
+        failed = true;
+        sfx.fail();
+        setTimeout(function () { showOverlay(false); }, 500);
+        busy = false;
+        return;
+      }
+      rack[slot] = bob;
+      bob.state = 'racked';
+      bob.tx = RACK_X[slot]; bob.ty = RACK_Y;
+      sfx.toRack();
+      rackMaxUsed = Math.max(rackMaxUsed, rack.filter(Boolean).length);
+      setTimeout(settle, 380);
+    }
+    layoutBelt(false);
+  }
+
+  function settle() {
+    busy = false;
+    if (clearedCount() === totalStitches) {
+      won = true;
+      sfx.win();
+      spawnConfetti();
+      setTimeout(function () { showOverlay(true); }, 650);
+      return;
+    }
+    // tıkanma: görünür konveyör + askıdaki hiçbir bobin ilerleyemiyorsa
+    var options = visibleQueue().concat(rack.filter(Boolean));
+    var any = options.some(function (b) { return exposedCellOf(b.color); });
+    if (!any) {
+      failed = true;
+      sfx.fail();
+      setTimeout(function () { showOverlay(false); }, 600);
+    }
+  }
+
+  // ---------- overlay ----------
+  function stars() {
+    return rackMaxUsed <= 1 ? 3 : (rackMaxUsed === 2 ? 2 : 1);
+  }
+  function showOverlay(success) {
     var starEl = document.getElementById('overlay-stars');
     starEl.innerHTML = '';
-    for (var i = 0; i < 3; i++) {
-      var s = document.createElement('span');
-      s.textContent = '★';
-      if (i >= stars) s.className = 'dim';
-      starEl.appendChild(s);
+    if (success) {
+      for (var i = 0; i < 3; i++) {
+        var s = document.createElement('span');
+        s.textContent = '★';
+        if (i >= stars()) s.className = 'dim';
+        starEl.appendChild(s);
+      }
+    } else {
+      starEl.textContent = '🧶';
     }
     document.getElementById('overlay-title').textContent =
-      stars === 3 ? 'Mükemmel!' : 'Tebrikler!';
-    document.getElementById('overlay-sub').textContent =
-      'Seviye ' + levelNum + ' tamamlandı' +
-      (mistakes ? ' · ' + mistakes + ' hatalı dokunuş' : ' · hatasız!');
+      success ? (stars() === 3 ? 'Mükemmel!' : 'Tebrikler!') : 'Tıkandın!';
+    document.getElementById('overlay-sub').textContent = success
+      ? 'Seviye ' + levelNum + ' tamamlandı'
+      : 'İpler kilitli kaldı — sökme sırasını değiştirip tekrar dene';
+    document.getElementById('btn-next').style.display = success ? '' : 'none';
     document.getElementById('overlay').classList.remove('hidden');
   }
-
   function hideOverlay() {
     document.getElementById('overlay').classList.add('hidden');
   }
 
-  // ---------- input ----------
+  // ---------- girdi ----------
   function canvasPoint(ev) {
     var rect = canvas.getBoundingClientRect();
     return {
@@ -433,83 +489,28 @@
       y: (ev.clientY - rect.top) / rect.height * H
     };
   }
-
-  function hitLoop(p) {
-    var candidates = level.loops
-      .filter(function (l) { return l.state === 'alive'; })
-      .sort(function (a, b) { return b.z - a.z; });
-    for (var c = 0; c < candidates.length; c++) {
-      var l = candidates[c];
-      var bb = l.bbox;
-      if (p.x < bb.minX - HIT_SLACK || p.x > bb.maxX + HIT_SLACK ||
-          p.y < bb.minY - HIT_SLACK || p.y > bb.maxY + HIT_SLACK) continue;
-      for (var s = 0; s < l.pts.length; s++) {
-        if (pointSegDist(p, l.pts[s], l.pts[(s + 1) % l.pts.length]) <= YARN_WIDTH / 2 + HIT_SLACK) {
-          return l;
-        }
+  function tap(p) {
+    if (won || failed) return;
+    var candidates = visibleQueue().concat(rack.filter(Boolean));
+    for (var i = 0; i < candidates.length; i++) {
+      var b = candidates[i];
+      if (Math.abs(p.x - b.x) < 44 && Math.abs(p.y - b.y) < 52) {
+        startBobbin(b);
+        return;
       }
     }
-    return null;
   }
-
-  function tap(p) {
-    if (won) return;
-    var loop = hitLoop(p);
-    if (!loop) return;
-    var blockers = blockersOf(level, loop);
-    if (blockers.length) {
-      mistakes++;
-      updateMistakeLabel();
-      loop.shakeT = 1;
-      blockers.forEach(function (b) { b.flashT = 1; });
-      sfx.blocked();
-      return;
-    }
-    loop.state = 'removing';
-    loop.rt = 0;
-    sfx.wind();
-  }
-
   canvas.addEventListener('pointerdown', function (ev) {
     ensureAudio();
     tap(canvasPoint(ev));
   });
 
-  document.getElementById('btn-restart').addEventListener('click', function () {
-    ensureAudio();
-    loadLevel(levelNum);
-  });
-  document.getElementById('btn-prev').addEventListener('click', function () {
-    ensureAudio();
-    loadLevel(levelNum - 1);
-  });
-  document.getElementById('btn-next').addEventListener('click', function () {
-    ensureAudio();
-    loadLevel(levelNum + 1);
-  });
-  document.getElementById('btn-replay').addEventListener('click', function () {
-    ensureAudio();
-    loadLevel(levelNum);
-  });
+  document.getElementById('btn-restart').addEventListener('click', function () { ensureAudio(); loadLevel(levelNum); });
+  document.getElementById('btn-prev').addEventListener('click', function () { ensureAudio(); loadLevel(levelNum - 1); });
+  document.getElementById('btn-next').addEventListener('click', function () { ensureAudio(); loadLevel(levelNum + 1); });
+  document.getElementById('btn-replay').addEventListener('click', function () { ensureAudio(); loadLevel(levelNum); });
 
-  // ---------- drawing ----------
-  function drawBoard() {
-    ctx.fillStyle = '#f6efe2';
-    ctx.fillRect(0, 0, W, H);
-
-    // soft vignette
-    var g = ctx.createRadialGradient(W / 2, H * 0.42, 80, W / 2, H * 0.42, 430);
-    g.addColorStop(0, 'rgba(255,255,255,0.5)');
-    g.addColorStop(1, 'rgba(120,95,60,0.16)');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
-
-    // pin board panel
-    ctx.fillStyle = 'rgba(122, 92, 58, 0.09)';
-    roundRect(22, 96, W - 44, 428, 26);
-    ctx.fill();
-  }
-
+  // ---------- çizim ----------
   function roundRect(x, y, w, h, r) {
     ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -520,246 +521,287 @@
     ctx.closePath();
   }
 
-  function drawPin(p) {
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.3)';
-    ctx.shadowBlur = 5;
-    ctx.shadowOffsetY = 2;
-    var g = ctx.createRadialGradient(p.x - 2, p.y - 2, 1, p.x, p.y, 8);
-    g.addColorStop(0, '#f4f6f8');
-    g.addColorStop(0.6, '#aeb6bf');
-    g.addColorStop(1, '#6d7680');
+  function drawBackground() {
+    ctx.fillStyle = '#f6efe2';
+    ctx.fillRect(0, 0, W, H);
+    var g = ctx.createRadialGradient(W / 2, H * 0.4, 80, W / 2, H * 0.4, 460);
+    g.addColorStop(0, 'rgba(255,255,255,0.5)');
+    g.addColorStop(1, 'rgba(120,95,60,0.16)');
     ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 7, 0, Math.PI * 2);
+    ctx.fillRect(0, 0, W, H);
+
+    // örgü panosu (ahşap çerçeve)
+    ctx.fillStyle = '#c89b6d';
+    roundRect(BOARD.x - 14, BOARD.y - 14, BOARD.w + 28, BOARD.h + 28, 20);
     ctx.fill();
-    ctx.restore();
-    ctx.strokeStyle = 'rgba(60,66,74,0.7)';
-    ctx.lineWidth = 1;
+    ctx.fillStyle = '#f9f4e9';
+    roundRect(BOARD.x - 4, BOARD.y - 4, BOARD.w + 8, BOARD.h + 8, 12);
+    ctx.fill();
+
+    // askı rafı
+    ctx.fillStyle = 'rgba(122,92,58,0.25)';
+    roundRect(52, RACK_Y - 34, W - 104, 74, 16);
+    ctx.fill();
+    ctx.fillStyle = '#8a6a48';
+    ctx.font = '700 11px system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('ASKI', 62, RACK_Y - 20);
+    RACK_X.forEach(function (x) {
+      ctx.strokeStyle = 'rgba(122,92,58,0.4)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath();
+      ctx.arc(x, RACK_Y, 26, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    });
+
+    // konveyör bandı
+    ctx.fillStyle = '#4a4258';
+    roundRect(26, BELT_Y - 34, W - 52, 72, 16);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([14, 12]);
+    ctx.lineDashOffset = -(performance.now() / 40) % 26;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, 7, 0, Math.PI * 2);
+    ctx.moveTo(34, BELT_Y + 26);
+    ctx.lineTo(W - 34, BELT_Y + 26);
     ctx.stroke();
-  }
-
-  function strokePolyline(pts, from, closed) {
-    ctx.beginPath();
-    ctx.moveTo(pts[from].x, pts[from].y);
-    for (var i = from + 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-    if (closed) ctx.closePath();
-    ctx.stroke();
-  }
-
-  function yarnStyle(loop, drawFn) {
-    var flash = loop.flashT;
-    var base = flash > 0 ? mixToWhite(loop.color, Math.min(flash, 0.7)) : loop.color;
-
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-
-    ctx.strokeStyle = shadeColor(loop.color, -0.45);
-    ctx.lineWidth = YARN_WIDTH + 3.5;
-    drawFn();
-
-    ctx.strokeStyle = base;
-    ctx.lineWidth = YARN_WIDTH;
-    drawFn();
-
-    // twisted-fiber highlight
-    ctx.strokeStyle = 'rgba(255,255,255,0.32)';
-    ctx.lineWidth = YARN_WIDTH - 3;
-    ctx.setLineDash([6, 9]);
-    ctx.lineDashOffset = loop.dashOffset;
-    drawFn();
     ctx.setLineDash([]);
   }
 
-  function mixToWhite(hex, t) {
-    return shadeColor(hex, t);
-  }
-
-  function drawLoop(loop) {
-    ctx.save();
-    if (loop.shakeT > 0) {
-      var s = Math.sin(loop.shakeT * 40) * 4 * loop.shakeT;
-      ctx.translate(s, 0);
-    }
-
-    if (loop.state === 'alive') {
-      yarnStyle(loop, function () { strokePolyline(loop.pts, 0, true); });
-    } else if (loop.state === 'removing') {
-      var head = Math.min(Math.floor(loop.rt), loop.pts.length - 1);
-      if (head < loop.pts.length - 1) {
-        yarnStyle(loop, function () { strokePolyline(loop.pts, head, false); });
-      }
-      // strand being pulled to the ball
-      var hp = loop.pts[head];
-      var mid = { x: (hp.x + BALL.x) / 2 + 18, y: (hp.y + BALL.y) / 2 + 46 };
-      ctx.strokeStyle = loop.color;
-      ctx.lineWidth = 4.5;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(hp.x, hp.y);
-      ctx.quadraticCurveTo(mid.x, mid.y, BALL.x, BALL.y - ballRadius() * 0.4);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
-
-  function ballRadius() {
-    return BALL_BASE_R + collected.length * 2.6 + ballPulse * 5;
-  }
-
-  function drawBall() {
-    var r = ballRadius();
-    var baseColor = collected.length ? collected[collected.length - 1] : '#c9b8a8';
-
-    ctx.save();
-    ctx.translate(BALL.x, BALL.y);
-    ctx.rotate(ballSpin);
-
-    ctx.shadowColor = 'rgba(0,0,0,0.25)';
-    ctx.shadowBlur = 12;
-    ctx.shadowOffsetY = 5;
-    ctx.fillStyle = baseColor;
-    ctx.beginPath();
-    ctx.arc(0, 0, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowColor = 'transparent';
-
-    // wrapped strands: arcs of every collected color
-    ctx.lineWidth = 3;
+  function drawStitch(c, r, colorIdx, exposed) {
+    var x = boardX + c * cell, y = boardY + r * cell;
+    var col = level.colors[colorIdx];
+    var lw = cell * 0.3;
     ctx.lineCap = 'round';
-    for (var i = 0; i < collected.length + 3; i++) {
-      var col = collected.length
-        ? collected[i % collected.length]
-        : '#b3a08e';
-      ctx.strokeStyle = shadeColor(col, i % 2 ? 0.25 : -0.2);
+
+    // koyu taban (derinlik)
+    ctx.strokeStyle = shadeColor(col, -0.4);
+    ctx.lineWidth = lw + 2;
+    strokeV(x, y);
+
+    ctx.strokeStyle = exposed ? shadeColor(col, 0.12) : shadeColor(col, -0.12);
+    ctx.lineWidth = lw;
+    strokeV(x, y);
+
+    // açık ilmeklerin üst kenarına parlama
+    if (exposed) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.lineWidth = 2.5;
       ctx.beginPath();
-      var ang = i * 1.7;
-      ctx.ellipse(0, 0, r * 0.92, r * (0.35 + (i % 3) * 0.22), ang, 0.3, Math.PI * 2 - 0.3);
+      ctx.moveTo(x + cell * 0.18, y + cell * 0.14);
+      ctx.lineTo(x + cell * 0.34, y + cell * 0.14);
       ctx.stroke();
     }
+  }
 
-    // highlight
-    ctx.fillStyle = 'rgba(255,255,255,0.28)';
+  function strokeV(x, y) {
     ctx.beginPath();
-    ctx.arc(-r * 0.35, -r * 0.4, r * 0.28, 0, Math.PI * 2);
+    ctx.moveTo(x + cell * 0.2, y + cell * 0.16);
+    ctx.lineTo(x + cell * 0.5, y + cell * 0.82);
+    ctx.moveTo(x + cell * 0.8, y + cell * 0.16);
+    ctx.lineTo(x + cell * 0.5, y + cell * 0.82);
+    ctx.stroke();
+  }
+
+  function drawBoard() {
+    for (var r = 0; r < level.rows; r++) {
+      for (var c = 0; c < level.cols; c++) {
+        if (grid[r][c] < 0) continue;
+        drawStitch(c, r, grid[r][c], r === 0 || grid[r - 1][c] < 0);
+      }
+    }
+  }
+
+  function drawBobbin(b) {
+    ctx.save();
+    var sx = b.x, sy = b.y;
+    if (b.shakeT > 0) sx += Math.sin(b.shakeT * 40) * 4 * b.shakeT;
+    ctx.translate(sx, sy);
+    if (b.state === 'leaving') ctx.globalAlpha = Math.max(b.scale, 0);
+    ctx.scale(b.scale, b.scale);
+
+    var col = level.colors[b.color];
+    // makara gövdesi
+    ctx.fillStyle = '#e8dcc8';
+    roundRect(-22, -30, 44, 60, 8);
     ctx.fill();
+    // sarılı ip
+    ctx.fillStyle = col;
+    roundRect(-19, -20, 38, 40, 6);
+    ctx.fill();
+    for (var i = 0; i < 4; i++) {
+      ctx.strokeStyle = shadeColor(col, i % 2 ? 0.18 : -0.18);
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(-19, -12 + i * 8);
+      ctx.quadraticCurveTo(0, -8 + i * 8, 19, -12 + i * 8);
+      ctx.stroke();
+    }
+    // kapasite rozeti
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(0, 30, 13, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = shadeColor(col, -0.25);
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.fillStyle = '#4a3f66';
+    ctx.font = '800 14px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(b.display), 0, 31);
     ctx.restore();
   }
 
   function drawProgress() {
-    var total = level.loops.length;
-    var done = level.loops.filter(function (l) { return l.state === 'gone'; }).length;
-    var bw = 180;
-    var x = (W - bw) / 2, y = 62;
+    var done = clearedCount();
+    var bw = 180, x = (W - bw) / 2, y = 56;
     ctx.fillStyle = 'rgba(90,74,120,0.15)';
     roundRect(x, y, bw, 10, 5);
     ctx.fill();
     if (done > 0) {
       ctx.fillStyle = '#8d6bf0';
-      roundRect(x, y, Math.max(10, bw * done / total), 10, 5);
+      roundRect(x, y, Math.max(10, bw * done / totalStitches), 10, 5);
       ctx.fill();
     }
     ctx.fillStyle = '#7a6b9e';
     ctx.font = '600 13px system-ui, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(done + ' / ' + total, W / 2, y + 26);
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(done + ' / ' + totalStitches, W / 2, y + 26);
   }
 
   function spawnConfetti() {
     for (var i = 0; i < 120; i++) {
       confetti.push({
-        x: Math.random() * W,
-        y: -20 - Math.random() * 200,
-        vx: (Math.random() - 0.5) * 60,
-        vy: 120 + Math.random() * 160,
-        rot: Math.random() * Math.PI * 2,
-        vr: (Math.random() - 0.5) * 8,
+        x: Math.random() * W, y: -20 - Math.random() * 200,
+        vx: (Math.random() - 0.5) * 60, vy: 120 + Math.random() * 160,
+        rot: Math.random() * Math.PI * 2, vr: (Math.random() - 0.5) * 8,
         size: 5 + Math.random() * 6,
         color: PALETTE[Math.floor(Math.random() * PALETTE.length)]
       });
     }
   }
-
   function drawConfetti(dt) {
-    confetti.forEach(function (c) {
-      c.x += c.vx * dt;
-      c.y += c.vy * dt;
-      c.rot += c.vr * dt;
+    confetti.forEach(function (cf) {
+      cf.x += cf.vx * dt; cf.y += cf.vy * dt; cf.rot += cf.vr * dt;
       ctx.save();
-      ctx.translate(c.x, c.y);
-      ctx.rotate(c.rot);
-      ctx.fillStyle = c.color;
-      ctx.fillRect(-c.size / 2, -c.size / 3, c.size, c.size * 0.66);
+      ctx.translate(cf.x, cf.y);
+      ctx.rotate(cf.rot);
+      ctx.fillStyle = cf.color;
+      ctx.fillRect(-cf.size / 2, -cf.size / 3, cf.size, cf.size * 0.66);
       ctx.restore();
     });
-    confetti = confetti.filter(function (c) { return c.y < H + 30; });
+    confetti = confetti.filter(function (cf) { return cf.y < H + 30; });
   }
 
-  // ---------- main loop ----------
+  // ---------- güncelleme ----------
   function update(dt) {
-    var anyRemoving = false;
-    level.loops.forEach(function (loop) {
-      if (loop.shakeT > 0) loop.shakeT = Math.max(0, loop.shakeT - dt * 3);
-      if (loop.flashT > 0) loop.flashT = Math.max(0, loop.flashT - dt * 2.4);
-
-      if (loop.state === 'removing') {
-        anyRemoving = true;
-        // consume the outline at a steady pace (~0.7s per loop)
-        loop.rt += loop.pts.length * dt / 0.7;
-        if (loop.rt >= loop.pts.length - 1) {
-          loop.state = 'gone';
-          collected.push(loop.color);
-          ballPulse = 1;
-          sfx.pop();
-          checkWin();
-        }
+    // bobin hareketleri (hedefe yumuşak süzülme)
+    queue.forEach(function (b) {
+      if (b.state === 'gone') return;
+      if (b.shakeT > 0) b.shakeT = Math.max(0, b.shakeT - dt * 3);
+      if (b.tx !== undefined) {
+        b.x += (b.tx - b.x) * Math.min(dt * 10, 1);
+        b.y += (b.ty - b.y) * Math.min(dt * 10, 1);
+      }
+      if (b.state === 'leaving') {
+        b.scale = Math.max(0, b.scale - dt * 3);
+        b.ty = BELT_Y - 140;
       }
     });
 
-    if (anyRemoving) ballSpin += dt * 6;
-    if (ballPulse > 0) ballPulse = Math.max(0, ballPulse - dt * 3);
+    // aktif bobin toplama döngüsü
+    if (active) {
+      collectTimer += dt * 1000;
+      while (active && collectTimer >= COLLECT_MS) {
+        collectTimer -= COLLECT_MS;
+        var found = active.remaining > 0 ? exposedCellOf(active.color) : null;
+        if (found) {
+          grid[found[1]][found[0]] = -1;
+          active.remaining--;
+          sfx.stitch();
+          flyers.push({
+            x: boardX + found[0] * cell + cell / 2,
+            y: boardY + found[1] * cell + cell / 2,
+            bob: active, t: 0, color: level.colors[active.color]
+          });
+        } else {
+          finishActive();
+        }
+      }
+    }
+
+    // uçan ilmekler
+    flyers.forEach(function (f) {
+      f.t += dt * 2.4;
+      if (f.t >= 1 && !f.done) {
+        f.done = true;
+        f.bob.display = Math.max(0, f.bob.display - 1);
+      }
+    });
+    flyers = flyers.filter(function (f) { return !f.done; });
   }
 
-  function checkWin() {
-    var allGone = level.loops.every(function (l) { return l.state === 'gone'; });
-    if (allGone && !won) {
-      won = true;
-      sfx.win();
-      spawnConfetti();
-      setTimeout(showOverlay, 650);
-    }
+  function drawFlyers() {
+    flyers.forEach(function (f) {
+      var t = Math.min(f.t, 1);
+      var mx = (f.x + f.bob.x) / 2 + 30;
+      var my = (f.y + f.bob.y) / 2 - 40;
+      var u = 1 - t;
+      var x = u * u * f.x + 2 * u * t * mx + t * t * f.bob.x;
+      var y = u * u * f.y + 2 * u * t * my + t * t * (f.bob.y - 20);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(t * 6);
+      ctx.scale(1 - t * 0.5, 1 - t * 0.5);
+      ctx.strokeStyle = f.color;
+      ctx.lineWidth = 6;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-7, -6);
+      ctx.lineTo(0, 7);
+      ctx.moveTo(7, -6);
+      ctx.lineTo(0, 7);
+      ctx.stroke();
+      ctx.restore();
+    });
   }
 
   function frame(ts) {
     var dt = Math.min((ts - lastTime) / 1000 || 0, 0.05);
     lastTime = ts;
-
     update(dt);
 
-    drawBoard();
+    drawBackground();
     drawProgress();
-    level.pins.forEach(drawPin);
-    level.loops
-      .slice()
-      .sort(function (a, b) { return a.z - b.z; })
-      .forEach(function (loop) {
-        if (loop.state !== 'gone') drawLoop(loop);
-      });
-    drawBall();
+    drawBoard();
+    queue.forEach(function (b) {
+      if (b.state !== 'gone' && b.state !== 'queued') drawBobbin(b);
+    });
+    visibleQueue().forEach(drawBobbin);
+    drawFlyers();
     if (confetti.length) drawConfetti(dt);
 
     requestAnimationFrame(frame);
   }
 
-  // test hook (used by the headless browser check)
+  // test kancası
   window.__yarn = {
     getLevel: function () { return level; },
-    getLevelNum: function () { return levelNum; },
+    getGrid: function () { return grid; },
+    getQueue: function () { return queue; },
+    getRack: function () { return rack; },
+    visibleQueue: visibleQueue,
+    startBobbin: startBobbin,
     isWon: function () { return won; },
-    tap: tap,
-    blockersOf: function (loop) { return blockersOf(level, loop); },
+    isFailed: function () { return failed; },
+    isBusy: function () { return busy || !!active; },
+    cleared: clearedCount,
+    total: function () { return totalStitches; },
     loadLevel: loadLevel
   };
 
