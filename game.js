@@ -22,7 +22,7 @@
   var RAIL_PAD = 26;
   var TRAY_Y = 634;
   var TRAY_X = [66, 138, 210, 282, 354];
-  var STITCH_MS = 130;
+  var STITCH_MS = 150;
   var MAX_TRACK = 5;      // rayda aynı anda en fazla makara
   var CONVOY_GAP = 0.085; // ray parametresinde makaralar arası boşluk
   var MAX_PENDING = 5;    // bekleme yuvası sayısı
@@ -483,9 +483,10 @@
       if (sp.linkNext === undefined || sp.idx === undefined) return;
       var partner = byIdx[sp.linkNext];
       if (!partner) return;
-      // ikisi de tepsideyken (ya da binerken) bağ görünür
-      var visible = (sp.state === 'tray' || sp.state === 'boarding') &&
-                    (partner.state === 'tray' || partner.state === 'boarding');
+      // bağ, ikisinden biri tamamlanana dek görünür: tepside, binerken
+      // ve RAYDA dönerken çift birbirinden ayrılmaz
+      var ok = ['tray', 'boarding', 'riding'];
+      var visible = ok.indexOf(sp.state) !== -1 && ok.indexOf(partner.state) !== -1;
       if (!visible) return;
       // bağ yana kavis yapar ki üst üste duran çiftte de görünsün
       var sway = 2.6 + Math.sin(now * 3) * 0.3;
@@ -567,7 +568,7 @@
   // bekleyen ilmekler, raydaki uygun makaraya sırayla akar
   function drainPending(dt) {
     pendingDrainT += dt * 1000;
-    if (pendingDrainT < 90) return;
+    if (pendingDrainT < 70) return;
     pendingDrainT = 0;
     for (var i = 0; i < pending.length; i++) {
       var p = pending[i];
@@ -808,7 +809,7 @@
     cancelTweens(sp);
     setTimeout(function () {
       if (gen !== loadGen) return;
-      tween(sp, { x: p.x, y: p.y, scale: 0.92, z: 2.2 }, 0.45, easeOutBack, function () {
+      tween(sp, { x: p.x, y: p.y, scale: 0.92, z: 2.2 }, 0.32, easeOutBack, function () {
         sp.state = 'riding';
       });
     }, (delay || 0) * 1000);
@@ -952,12 +953,17 @@
         var ms = STITCH_MS / speedMult();
         while (stitchTimer >= ms && pos < level.stream.length && !failed) {
           var st = level.stream[pos];
-          var winder = null;
+          var winder = null, incoming = null;
           for (var ci = 0; ci < convoy.length; ci++) {
-            if (convoy[ci].color === st.color && convoy[ci].remaining > 0 && convoy[ci].state === 'riding') {
-              winder = convoy[ci];
-              break;
+            if (convoy[ci].color === st.color && convoy[ci].remaining > 0) {
+              if (convoy[ci].state === 'riding') { winder = convoy[ci]; break; }
+              incoming = convoy[ci]; // raya binmekte olan eş renk
             }
+          }
+          if (!winder && incoming) {
+            // makara yolda: ip onu bekler, ilmek yuvaya düşmez
+            stitchTimer = 0;
+            break;
           }
           stitchTimer -= ms;
           if (winder) {

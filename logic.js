@@ -407,8 +407,19 @@
   }
 
   function generateLevel(n) {
-    var rnd = mulberry32(n * 7919 + 271);
     var pattern = PATTERNS[(n - 1) % PATTERNS.length];
+
+    // Aynı desen için farklı tohumlarla dener; çözülemeyen tohumu atlar.
+    // Son çare: renk başına tek makara + zincirsiz (kanıtlanabilir çözüm).
+    for (var attempt = 0; attempt < 12; attempt++) {
+      var level = buildAttempt(n, pattern, attempt, false);
+      if (solveCheck(level)) return level;
+    }
+    return buildAttempt(n, pattern, 0, true);
+  }
+
+  function buildAttempt(n, pattern, attempt, safeMode) {
+    var rnd = mulberry32(n * 7919 + 271 + attempt * 104729);
     var rows = pattern.rows.length, cols = pattern.rows[0].length;
 
     var roles = ['.'];
@@ -443,7 +454,9 @@
       }
     }
 
-    var splitChance = Math.min(0.25 + n * 0.04, 0.75);
+    // kapasiteler sınırlı tutulur ki her seviyede tepsi makaralarla dolsun;
+    // safeMode: renk başına tek makara (kanıtlanabilir çözüm)
+    var capMax = Math.max(6, Math.ceil(stream.length / 12));
     var open = {};
     var spools = [];
     for (i = 0; i < stream.length; i++) {
@@ -453,10 +466,8 @@
         for (var s2 = i; s2 < stream.length; s2++) {
           if (stream[s2].color === col) remainingTotal++;
         }
-        var cap = remainingTotal;
-        if (remainingTotal > 8 && rnd() < splitChance) {
-          cap = Math.max(4, Math.ceil(remainingTotal * (0.35 + rnd() * 0.4)));
-        }
+        var cap = safeMode ? remainingTotal
+          : Math.min(remainingTotal, 4 + Math.floor(rnd() * capMax));
         spools.push({ color: col, cap: cap });
         open[col] = cap;
       }
@@ -469,10 +480,8 @@
     };
 
     // bağlı makaralar: ardışık 2'li ya da 3'lü zincir — tepside üst üste
-    // dururlar, öndekini alınca ZİNCİRİN TAMAMI raya biner. linkNext=i+1
-    // "bir sonrakine bağlı" demektir. Seviye 5+ ve çözülebilirlik
-    // bozulmuyorsa uygulanır.
-    if (n >= 5) {
+    // dururlar, öndekini alınca ZİNCİRİN TAMAMI raya biner.
+    if (n >= 5 && !safeMode) {
       var linkChance = Math.min(0.10 + n * 0.01, 0.3);
       for (i = 0; i + 1 < spools.length; i++) {
         if (spools[i].linkNext !== undefined) continue;
@@ -492,6 +501,7 @@
 
     return level;
   }
+
 
   // zincir uzunluğu: idx'ten ileriye kaç makara bağlı (kendisi dahil)
   function chainLength(spools, i) {
@@ -525,10 +535,19 @@
   }
 
   function solveCheck(level) {
+    // Akıllı çözücü: gereken renk öndeyse bindirir; gömülüyse rengi en sığ
+    // derinlikte barındıran sütunu KAZAR (önündekileri raya bindirir).
+    // Rayda 5 slot sınırı her adımda gözetilir.
     var trayCols = buildTray(level);
     var dock = [];
     var pos = 0;
-    var guard = level.stream.length * 4 + 50;
+    var guard = level.stream.length * 6 + 200;
+    function boardFrom(t) {
+      var len = frontChainLength(trayCols[t]);
+      if (dock.length + len > 5) return false;
+      for (var k = 0; k < len; k++) dock.push(trayCols[t].shift());
+      return true;
+    }
     while (pos < level.stream.length && guard-- > 0) {
       var need = level.stream[pos].color;
       var spool = null;
@@ -541,21 +560,27 @@
         if (spool.cap === 0) dock.splice(dock.indexOf(spool), 1);
         continue;
       }
-      var found = false;
-      for (var t = 0; t < 5; t++) {
-        var front = trayCols[t].length && trayCols[t][0];
-        if (front && front.color === need) {
-          var len = frontChainLength(trayCols[t]);
-          if (dock.length + len > 5) return false;
-          for (var k = 0; k < len; k++) dock.push(trayCols[t].shift()); // zincir komple biner
-          found = true;
-          break;
+      var t, direct = -1;
+      for (t = 0; t < 5; t++) {
+        if (trayCols[t].length && trayCols[t][0].color === need) { direct = t; break; }
+      }
+      if (direct >= 0) {
+        if (!boardFrom(direct)) return false;
+        continue;
+      }
+      // kazı: need rengini en sığ derinlikte içeren sütun
+      var best = -1, bestDepth = Infinity;
+      for (t = 0; t < 5; t++) {
+        for (var d2 = 1; d2 < trayCols[t].length; d2++) {
+          if (trayCols[t][d2].color === need && d2 < bestDepth) { bestDepth = d2; best = t; }
         }
       }
-      if (!found) return false;
+      if (best < 0) return false;
+      if (!boardFrom(best)) return false;
     }
     return pos === level.stream.length && guard > 0;
   }
+
 
   var api = {
     PALETTE: PALETTE,
