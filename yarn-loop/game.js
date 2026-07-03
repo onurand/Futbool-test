@@ -20,14 +20,24 @@
   var H = 700;
   var BOARD = { x: 64, y: 100, w: 292, h: 330 };
   var RAIL_PAD = 26;
-  var TRAY_Y = 606;
+  var TRAY_Y = 634;
   var TRAY_X = [66, 138, 210, 282, 354];
   var STITCH_MS = 130;
   var MAX_TRACK = 5;      // rayda aynı anda en fazla makara
   var CONVOY_GAP = 0.085; // ray parametresinde makaralar arası boşluk
   var MAX_PENDING = 5;    // bekleme yuvası sayısı
   var PEND_X = [66, 138, 210, 282, 354];
-  var PEND_Y = 514;
+  var PEND_Y = 494;
+  var TRAY_TOP_Y = 574;   // tepsi üst sırası (görünür, dokunulamaz)
+  var MAX_LEVEL = 100;
+
+  // tepsi dizilimi: 0 = ön (alt) sıra dokunulabilir, 1 = üst sıra görünür,
+  // 2+ üst sıranın arkasında küçülerek bekler
+  function trayPosFor(ri) {
+    if (ri === 0) return { y: TRAY_Y, scale: 0.8, z: 1.2 };
+    if (ri === 1) return { y: TRAY_TOP_Y, scale: 0.72, z: 1.0 };
+    return { y: TRAY_TOP_Y - (ri - 1) * 7, scale: 0.5, z: 0.7 - (ri - 2) * 0.2 };
+  }
 
   var WS = 0.1; // dünya ölçeği: 1 mantık birimi = 0.1 dünya birimi
   function wx(x) { return (x - W / 2) * WS; }
@@ -267,12 +277,12 @@
       staticGroup.add(inner);
     });
 
-    // tepsi paneli (ahşap)
+    // tepsi paneli (ahşap, iki sıra makara alır)
     var tray = new THREE.Mesh(
-      new THREE.BoxGeometry((W - 48) * WS, 12.4, 1.2),
+      new THREE.BoxGeometry((W - 48) * WS, 15.6, 1.2),
       mat('#8a5a36', { roughness: 0.8 })
     );
-    tray.position.set(0, wy(TRAY_Y + 6), -0.7);
+    tray.position.set(0, wy((TRAY_TOP_Y + TRAY_Y) / 2 + 4), -0.7);
     tray.receiveShadow = true;
     staticGroup.add(tray);
   }
@@ -651,7 +661,7 @@
   // ---------- seviye yaşam döngüsü ----------
   function loadLevel(n) {
     loadGen++;
-    levelNum = Math.max(1, n);
+    levelNum = Math.min(Math.max(1, n), MAX_LEVEL);
     localStorage.setItem('yarnloop.level', String(levelNum));
     level = YL.generateLevel(levelNum);
     alive = level.grid.map(function (row) { return row.map(function () { return true; }); });
@@ -671,8 +681,9 @@
 
     trayCols = YL.buildTray(level).map(function (col, ci) {
       return col.map(function (b, ri) {
-        var sp = makeSpoolEntity(b.color, b.cap, TRAY_X[ci], TRAY_Y + ri * 8, ri === 0 ? 0.8 : 0.55);
-        sp.z = 1.2 - ri * 0.5;
+        var tp = trayPosFor(ri);
+        var sp = makeSpoolEntity(b.color, b.cap, TRAY_X[ci], tp.y, tp.scale);
+        sp.z = tp.z;
         sp.idx = b.idx;
         sp.linkNext = b.linkNext;
         return sp;
@@ -696,7 +707,7 @@
     buildStatics();
     buildStitches();
     updateTrackChip();
-    document.getElementById('level-label').textContent = 'Seviye ' + levelNum;
+    document.getElementById('level-label').textContent = 'Seviye ' + levelNum + ' / ' + MAX_LEVEL;
     document.getElementById('mistake-label').textContent = '';
     updateProgress();
     hideOverlay();
@@ -748,12 +759,16 @@
     } else {
       starEl.textContent = '🧶';
     }
-    document.getElementById('overlay-title').textContent =
-      success ? (stars() === 3 ? 'Mükemmel!' : 'Tebrikler!') : 'Tıkandın!';
-    document.getElementById('overlay-sub').textContent = success
-      ? 'Seviye ' + levelNum + ' tamamlandı — ' + level.name + ' söküldü'
-      : 'Bekleme yuvaları taştı! Doğru renk makarayı zamanında raya bindir';
-    document.getElementById('btn-next').style.display = success ? '' : 'none';
+    var finished = success && levelNum >= MAX_LEVEL;
+    document.getElementById('overlay-title').textContent = finished
+      ? '🏆 Hepsini Bitirdin!'
+      : (success ? (stars() === 3 ? 'Mükemmel!' : 'Tebrikler!') : 'Tıkandın!');
+    document.getElementById('overlay-sub').textContent = finished
+      ? '100 seviyenin tamamını söktün — gerçek bir örgü ustasısın!'
+      : (success
+        ? 'Seviye ' + levelNum + ' tamamlandı — ' + level.name + ' söküldü'
+        : 'Bekleme yuvaları taştı! Doğru renk makarayı zamanında raya bindir');
+    document.getElementById('btn-next').style.display = (success && !finished) ? '' : 'none';
     document.getElementById('overlay').classList.remove('hidden');
   }
   function hideOverlay() {
@@ -808,8 +823,9 @@
     sfx.dockIn();
     updateTrackChip();
     colArr.forEach(function (b, ri) {
+      var tp = trayPosFor(ri);
       cancelTweens(b);
-      tween(b, { y: TRAY_Y + ri * 8, scale: ri === 0 ? 0.8 : 0.55, z: 1.2 - ri * 0.5 }, 0.3, easeOutBack);
+      tween(b, { y: tp.y, scale: tp.scale, z: tp.z }, 0.3, easeOutBack);
     });
     return true;
   }
