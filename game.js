@@ -26,6 +26,7 @@
   var MAX_TRACK = 5;      // rayda aynı anda en fazla makara
   var CONVOY_GAP = 0.085; // ray parametresinde makaralar arası boşluk
   var MAX_PENDING = 5;    // bekleme yuvası sayısı
+  var PENDING_DROP_MS = 850; // eşleşmeyen ilmeğin yuvaya düşme aralığı
   var PEND_X = [66, 138, 210, 282, 354];
   var PEND_Y = 494;
   var TRAY_TOP_Y = 574;   // tepsi üst sırası (görünür, dokunulamaz)
@@ -63,6 +64,8 @@
   var heartbeatT = 0;     // tehlike kalp atışı zamanlayıcısı
   var pending = [];       // bekleme yuvasındaki eşleşmemiş ilmekler
   var pendingDrainT = 0;  // bekleyenlerin makaraya akış zamanlayıcısı
+  var dropTimer = 0;      // yuvaya düşme temposu (yavaş)
+  var burnT = 0;          // 5 yuva doluyken yanma müsamahası
   var flowStarted = false; // ilk makara binene dek ip akmaz
   var loadGen = 0;        // seviye nesli: eski zamanlayıcılar yeni seviyeye sızmasın
 
@@ -703,6 +706,8 @@
     });
     combo = 0;
     heartbeatT = 0;
+    dropTimer = 0;
+    burnT = 0;
     pending.forEach(function (p) { root.remove(p.g); });
     pending = [];
     pendingDrainT = 0;
@@ -815,22 +820,35 @@
     }, (delay || 0) * 1000);
   }
 
-  function tapTray(colIdx) {
+  // s konumundan ileriye zincir uzunluğu
+  function chainLenAt(colArr, s) {
+    var len = 1;
+    while (colArr[s + len - 1] && colArr[s + len] &&
+           colArr[s + len - 1].linkNext === colArr[s + len].idx) len++;
+    return len;
+  }
+  // s'nin dahil olduğu zincirin başı (geriye yürü)
+  function chainStartFor(colArr, s) {
+    while (s > 0 && colArr[s - 1].linkNext === colArr[s].idx) s--;
+    return s;
+  }
+
+  // row 0 = alt sıra, row 1 = üst sıra; ikisi de seçilebilir.
+  // Zincir üyesine dokunulursa zincir BÜTÜN olarak biner.
+  function tapTray(colIdx, row) {
     if (won || failed) return false;
     var colArr = trayCols[colIdx];
-    if (!colArr.length) return false;
-    // zincir: öndeki makaraya bağlı olanlar da onunla birlikte biner
-    var chainLen = 1;
-    while (colArr[chainLen - 1] && colArr[chainLen] &&
-           colArr[chainLen - 1].linkNext === colArr[chainLen].idx) chainLen++;
-    if (convoy.length + chainLen > MAX_TRACK) {
-      colArr[0].shake = 1;
+    row = row || 0;
+    if (colArr.length <= row) return false;
+    var start = chainStartFor(colArr, row);
+    var len = chainLenAt(colArr, start);
+    if (convoy.length + len > MAX_TRACK) {
+      colArr[row].shake = 1;
       sfx.blocked();
       return false;
     }
-    for (var k = 0; k < chainLen; k++) {
-      boardSpool(colArr.shift(), k * 0.14);
-    }
+    var taken = colArr.splice(start, len);
+    taken.forEach(function (sp, k) { boardSpool(sp, k * 0.14); });
     flowStarted = true;
     sfx.dockIn();
     updateTrackChip();
@@ -844,9 +862,10 @@
   canvas.addEventListener('pointerdown', function (ev) {
     ensureAudio();
     var p = canvasPoint(ev);
-    if (p.y > TRAY_Y - 50) {
+    if (p.y > TRAY_TOP_Y - 44) {
+      var row = p.y > (TRAY_TOP_Y + TRAY_Y) / 2 ? 0 : 1;
       for (var i = 0; i < 5; i++) {
-        if (Math.abs(p.x - TRAY_X[i]) < 34) { tapTray(i); return; }
+        if (Math.abs(p.x - TRAY_X[i]) < 34) { tapTray(i, row); return; }
       }
     }
   });
@@ -943,30 +962,29 @@
         var gen = loadGen;
         setTimeout(function () { if (gen === loadGen) showOverlay(true); }, 800);
       } else if (flowStarted) {
-        // KESİNTİSİZ AKIŞ: ip hep sökülür. Sıradaki ilmeğin renginde
-        // makara raydaysa ona sarılır; yoksa bekleme yuvasına düşer.
-        // Yuvalar taşarsa yanarsın.
+        // KESİNTİSİZ AKIŞ: eşleşen makara raydaysa ip hızla sarılır.
+        // Eşleşme yoksa ip DURMAZ ama ilmekler yuvaya YAVAŞ tempoda düşer
+        // (oyuncuya tepki süresi); 5 yuva dolu kalırsa yanarsın.
         var spool = matchingTrackSpool();
         activeSpool = spool && spool.state === 'riding' ? spool : null;
 
-        stitchTimer += dt * 1000;
-        var ms = STITCH_MS / speedMult();
-        while (stitchTimer >= ms && pos < level.stream.length && !failed) {
-          var st = level.stream[pos];
-          var winder = null, incoming = null;
-          for (var ci = 0; ci < convoy.length; ci++) {
-            if (convoy[ci].color === st.color && convoy[ci].remaining > 0) {
-              if (convoy[ci].state === 'riding') { winder = convoy[ci]; break; }
-              incoming = convoy[ci]; // raya binmekte olan eş renk
-            }
+        var stNow = level.stream[pos];
+        var winder = null, incoming = null;
+        for (var ci = 0; ci < convoy.length; ci++) {
+          if (convoy[ci].color === stNow.color && convoy[ci].remaining > 0) {
+            if (convoy[ci].state === 'riding') { winder = convoy[ci]; break; }
+            incoming = convoy[ci];
           }
-          if (!winder && incoming) {
-            // makara yolda: ip onu bekler, ilmek yuvaya düşmez
-            stitchTimer = 0;
-            break;
-          }
-          stitchTimer -= ms;
-          if (winder) {
+        }
+
+        if (winder) {
+          dropTimer = 0;
+          stitchTimer += dt * 1000;
+          var ms = STITCH_MS / speedMult();
+          while (stitchTimer >= ms && pos < level.stream.length) {
+            var st = level.stream[pos];
+            if (st.color !== winder.color || winder.remaining === 0) break;
+            stitchTimer -= ms;
             alive[st.r][st.c] = false;
             hideStitch(st.c, st.r);
             winder.remaining--;
@@ -976,38 +994,60 @@
             sfx.stitch();
             spawnFlyer(st, winder);
             railT += 0.011;
-            if (winder.remaining === 0) completeSpool(winder);
-          } else {
-            // renk rayda yok → ilmek bekleme yuvasına
-            if (pending.length >= MAX_PENDING) {
-              failed = true;
-              shakeT = 1;
-              sfx.fail();
-              saveStats();
-              var fgen = loadGen;
-              setTimeout(function () { if (fgen === loadGen) showOverlay(false); }, 500);
+            updateProgress();
+            ms = STITCH_MS / speedMult();
+            if (winder.remaining === 0) {
+              completeSpool(winder);
               break;
             }
-            alive[st.r][st.c] = false;
-            hideStitch(st.c, st.r);
-            pos++;
-            combo = 0;
-            addPending(st);
-            beep(260, 180, 0.1, 'sine', 0.12);
           }
-          updateProgress();
-          ms = STITCH_MS / speedMult();
+        } else if (incoming) {
+          // eş renk makara raya binmek üzere: ip onu bekler
+          stitchTimer = 0;
+          dropTimer = 0;
+        } else {
+          // renk rayda yok: ilmekler yavaş tempoda yuvaya düşer
+          stitchTimer = 0;
+          combo = 0;
+          dropTimer += dt * 1000;
+          if (dropTimer >= PENDING_DROP_MS && pending.length < MAX_PENDING) {
+            dropTimer = 0;
+            alive[stNow.r][stNow.c] = false;
+            hideStitch(stNow.c, stNow.r);
+            pos++;
+            addPending(stNow);
+            beep(260, 180, 0.1, 'sine', 0.12);
+            updateProgress();
+          }
         }
 
         drainPending(dt);
 
-        // tehlike: yuvalar dolmaya yakınken kalp atışı
-        if (pending.length >= MAX_PENDING - 1) {
+        // yanma: 5 yuva da doluysa kısa müsamaha, kurtarılamazsa yandın
+        if (pending.length >= MAX_PENDING) {
+          burnT += dt;
           heartbeatT += dt;
-          if (heartbeatT > 0.6) {
+          if (heartbeatT > 0.35) {
             heartbeatT = 0;
-            beep(110, 90, 0.12, 'sine', 0.25);
-            shakeT = Math.max(shakeT, 0.2);
+            beep(110, 90, 0.12, 'sine', 0.28);
+            shakeT = Math.max(shakeT, 0.25);
+          }
+          if (burnT > 1.2 && !failed) {
+            failed = true;
+            shakeT = 1;
+            sfx.fail();
+            saveStats();
+            var fgen = loadGen;
+            setTimeout(function () { if (fgen === loadGen) showOverlay(false); }, 500);
+          }
+        } else {
+          burnT = 0;
+          if (pending.length >= MAX_PENDING - 1) {
+            heartbeatT += dt;
+            if (heartbeatT > 0.7) {
+              heartbeatT = 0;
+              beep(110, 90, 0.12, 'sine', 0.22);
+            }
           }
         }
       }
@@ -1036,9 +1076,11 @@
         if (sp.remaining > 0) delete hintColors[sp.color];
       });
       trayCols.forEach(function (colArr) {
-        if (colArr.length && colArr[0].state === 'tray') {
-          var front = colArr[0];
-          front.scale = hintColors[front.color] ? 0.8 + Math.sin(now * 6) * 0.06 : 0.8;
+        for (var ri = 0; ri < Math.min(colArr.length, 2); ri++) {
+          if (colArr[ri].state !== 'tray') continue;
+          var base = trayPosFor(ri).scale;
+          colArr[ri].scale = hintColors[colArr[ri].color]
+            ? base + Math.sin(now * 6) * 0.06 : base;
         }
       });
     }
