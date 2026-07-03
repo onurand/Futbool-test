@@ -339,34 +339,45 @@
 
   // ---------- makara modeli ----------
   function buildSpoolMesh(colorHex) {
+    // basık, tombul, parlak makara: geniş taban + 2 kalın ip halkası +
+    // parlak kubbe kapak (raptiye/yo-yo oranları, boy < en)
     var g = new THREE.Group();
-    var body = mat(colorHex, { roughness: 0.5 });
-    var dark = mat(shade(colorHex, -0.35), { roughness: 0.55 });
+    var body = mat(colorHex, { roughness: 0.22 });
+    var light = mat(shade(colorHex, 0.18), { roughness: 0.2 });
+    var dark = mat(shade(colorHex, -0.3), { roughness: 0.28 });
 
-    // tombul sarım halkaları (şeker görünümü)
-    for (var i = 0; i < 3; i++) {
-      var ring = new THREE.Mesh(new THREE.TorusGeometry(1.0, 0.56, 12, 26), i % 2 ? body : mat(shade(colorHex, 0.15), { roughness: 0.32 }));
+    // geniş taban diski (yuvarlatılmış kenar)
+    var base = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.62, 0.42, 26), dark);
+    base.position.y = -1.05;
+    base.castShadow = true;
+    g.add(base);
+    var baseRim = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.17, 10, 26), dark);
+    baseRim.rotation.x = Math.PI / 2;
+    baseRim.position.y = -0.86;
+    g.add(baseRim);
+
+    // tombul ip gövdesi: iki kalın sarım halkası
+    [[-0.45, body], [0.25, light]].forEach(function (r) {
+      var ring = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.62, 14, 28), r[1]);
       ring.rotation.x = Math.PI / 2;
-      ring.position.y = -1.05 + i * 1.05;
+      ring.position.y = r[0];
       ring.castShadow = true;
       g.add(ring);
-    }
-    // orta silindir
-    var core = new THREE.Mesh(new THREE.CylinderGeometry(0.98, 0.98, 3.2, 20), body);
-    core.position.y = 0;
-    core.castShadow = true;
+    });
+    var core = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 1.7, 20), body);
+    core.position.y = -0.1;
     g.add(core);
-    // kapak diskleri
-    var capTop = new THREE.Mesh(new THREE.CylinderGeometry(1.45, 1.45, 0.34, 24), dark);
-    capTop.position.y = 1.85;
-    capTop.castShadow = true;
-    g.add(capTop);
-    var capBot = capTop.clone();
-    capBot.position.y = -1.85;
-    g.add(capBot);
-    // mil
-    var axle = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 4.4, 12), mat('#d8cdbb', { roughness: 0.35 }));
-    g.add(axle);
+
+    // kapak + parlak kubbe (spekülar parlama burada yakalanır)
+    var cap = new THREE.Mesh(new THREE.CylinderGeometry(1.32, 1.4, 0.32, 26), dark);
+    cap.position.y = 0.95;
+    cap.castShadow = true;
+    g.add(cap);
+    var dome = new THREE.Mesh(new THREE.SphereGeometry(1.18, 24, 16), mat(shade(colorHex, 0.12), { roughness: 0.14 }));
+    dome.scale.set(1, 0.42, 1);
+    dome.position.y = 1.08;
+    dome.castShadow = true;
+    g.add(dome);
     return g;
   }
 
@@ -409,7 +420,7 @@
     sp.group = buildSpoolMesh(level.colors[colorIdx]);
     sp.badge = new THREE.Sprite(badgeSprite(cap, level.colors[colorIdx]));
     sp.badge.scale.set(2.7, 2.7, 1);
-    sp.badge.position.y = 3.4;
+    sp.badge.position.y = 2.6;
     sp.group.add(sp.badge);
     root.add(sp.group);
     allSpools.push(sp);
