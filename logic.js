@@ -173,44 +173,60 @@
       grid: grid, colors: colors, stream: stream, spools: spools
     };
 
-    // bağlı makaralar: ardışık iki makara iple birbirine bağlanır —
-    // tepside biri altta biri üstte durur, öndekini alınca ikisi birden
-    // raya biner (2 slot ister). Seviye 5+ ve çözülebilirlik bozulmuyorsa.
+    // bağlı makaralar: ardışık 2'li ya da 3'lü zincir — tepside üst üste
+    // dururlar, öndekini alınca ZİNCİRİN TAMAMI raya biner. linkNext=i+1
+    // "bir sonrakine bağlı" demektir. Seviye 5+ ve çözülebilirlik
+    // bozulmuyorsa uygulanır.
     if (n >= 5) {
       var linkChance = Math.min(0.10 + n * 0.01, 0.3);
       for (i = 0; i + 1 < spools.length; i++) {
-        if (spools[i].link !== undefined || spools[i + 1].link !== undefined) continue;
+        if (spools[i].linkNext !== undefined) continue;
         if (rnd() < linkChance) {
-          spools[i].link = i + 1;
-          spools[i + 1].link = i;
-          i++;
+          var chainLen = (rnd() < 0.35 && i + 2 < spools.length) ? 3 : 2;
+          chainLen = Math.min(chainLen, spools.length - i);
+          for (var c2 = 0; c2 < chainLen - 1; c2++) {
+            spools[i + c2].linkNext = i + c2 + 1;
+          }
+          i += chainLen - 1;
         }
       }
       if (!solveCheck(level)) {
-        spools.forEach(function (sp) { delete sp.link; });
+        spools.forEach(function (sp) { delete sp.linkNext; });
       }
     }
 
     return level;
   }
 
-  // tepsi: makaralar açılış sırasıyla sütunlara dağıtılır; bağlı çift
-  // AYNI sütuna üst üste konur (öndekiyle birlikte arkadaki de gelir)
+  // zincir uzunluğu: idx'ten ileriye kaç makara bağlı (kendisi dahil)
+  function chainLength(spools, i) {
+    var len = 1;
+    while (spools[i + len - 1] && spools[i + len - 1].linkNext === i + len) len++;
+    return len;
+  }
+
+  // tepsi: makaralar açılış sırasıyla sütunlara dağıtılır; zincir AYNI
+  // sütuna üst üste konur (öndekiyle birlikte arkadakiler de gelir)
   function buildTray(level) {
     var trayCols = [[], [], [], [], []];
     var col = 0;
     for (var i = 0; i < level.spools.length; i++) {
-      var sp = level.spools[i];
-      var item = { color: sp.color, cap: sp.cap, idx: i, link: sp.link };
-      trayCols[col].push(item);
-      if (sp.link === i + 1) {
-        var partner = level.spools[i + 1];
-        trayCols[col].push({ color: partner.color, cap: partner.cap, idx: i + 1, link: i });
-        i++;
+      var len = chainLength(level.spools, i);
+      for (var k = 0; k < len; k++) {
+        var sp = level.spools[i + k];
+        trayCols[col].push({ color: sp.color, cap: sp.cap, idx: i + k, linkNext: sp.linkNext });
       }
+      i += len - 1;
       col = (col + 1) % 5;
     }
     return trayCols;
+  }
+
+  // sütun önündeki zincirin uzunluğu (tepsi öğeleri üstünden)
+  function frontChainLength(colArr) {
+    var len = 1;
+    while (colArr[len - 1] && colArr[len] && colArr[len - 1].linkNext === colArr[len].idx) len++;
+    return len;
   }
 
   function solveCheck(level) {
@@ -234,10 +250,9 @@
       for (var t = 0; t < 5; t++) {
         var front = trayCols[t].length && trayCols[t][0];
         if (front && front.color === need) {
-          var isPair = front.link === front.idx + 1;
-          if (dock.length + (isPair ? 2 : 1) > 5) return false;
-          dock.push(trayCols[t].shift());
-          if (isPair) dock.push(trayCols[t].shift()); // bağlı eş de biner
+          var len = frontChainLength(trayCols[t]);
+          if (dock.length + len > 5) return false;
+          for (var k = 0; k < len; k++) dock.push(trayCols[t].shift()); // zincir komple biner
           found = true;
           break;
         }
@@ -251,6 +266,7 @@
     PALETTE: PALETTE,
     generateLevel: generateLevel,
     buildTray: buildTray,
+    frontChainLength: frontChainLength,
     solveCheck: solveCheck
   };
 

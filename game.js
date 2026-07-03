@@ -22,9 +22,12 @@
   var RAIL_PAD = 26;
   var TRAY_Y = 606;
   var TRAY_X = [66, 138, 210, 282, 354];
-  var STITCH_MS = 105;
-  var MAX_TRACK = 5;    // rayda aynı anda en fazla makara
+  var STITCH_MS = 130;
+  var MAX_TRACK = 5;      // rayda aynı anda en fazla makara
   var CONVOY_GAP = 0.085; // ray parametresinde makaralar arası boşluk
+  var MAX_PENDING = 5;    // bekleme yuvası sayısı
+  var PEND_X = [66, 138, 210, 282, 354];
+  var PEND_Y = 514;
 
   var WS = 0.1; // dünya ölçeği: 1 mantık birimi = 0.1 dünya birimi
   function wx(x) { return (x - W / 2) * WS; }
@@ -48,6 +51,10 @@
   var lastTime = 0;
   var combo = 0;          // kesintisiz sarılan ilmek sayısı
   var heartbeatT = 0;     // tehlike kalp atışı zamanlayıcısı
+  var pending = [];       // bekleme yuvasındaki eşleşmemiş ilmekler
+  var pendingDrainT = 0;  // bekleyenlerin makaraya akış zamanlayıcısı
+  var flowStarted = false; // ilk makara binene dek ip akmaz
+  var loadGen = 0;        // seviye nesli: eski zamanlayıcılar yeni seviyeye sızmasın
 
   // kalıcı istatistikler (profil + koleksiyon)
   var stats;
@@ -243,6 +250,23 @@
     back.receiveShadow = true;
     staticGroup.add(back);
 
+    // bekleme yuvaları: renk bulunamayan ilmekler buraya düşer
+    PEND_X.forEach(function (x) {
+      var slot = new THREE.Mesh(
+        new THREE.BoxGeometry(5.6, 5.6, 0.7),
+        mat('#a8815a', { roughness: 0.85 })
+      );
+      slot.position.set(wx(x), wy(PEND_Y), -0.35);
+      slot.receiveShadow = true;
+      staticGroup.add(slot);
+      var inner = new THREE.Mesh(
+        new THREE.BoxGeometry(4.6, 4.6, 0.4),
+        mat('#f7e8d2', { roughness: 0.9 })
+      );
+      inner.position.set(wx(x), wy(PEND_Y), -0.1);
+      staticGroup.add(inner);
+    });
+
     // tepsi paneli (ahşap)
     var tray = new THREE.Mesh(
       new THREE.BoxGeometry((W - 48) * WS, 12.4, 1.2),
@@ -435,8 +459,8 @@
     var byIdx = {};
     allSpools.forEach(function (sp) { if (sp.idx !== undefined) byIdx[sp.idx] = sp; });
     allSpools.forEach(function (sp) {
-      if (sp.link === undefined || sp.idx === undefined || sp.link < sp.idx) return;
-      var partner = byIdx[sp.link];
+      if (sp.linkNext === undefined || sp.idx === undefined) return;
+      var partner = byIdx[sp.linkNext];
       if (!partner) return;
       // ikisi de tepsideyken (ya da binerken) bağ görünür
       var visible = (sp.state === 'tray' || sp.state === 'boarding') &&
@@ -461,21 +485,13 @@
   // ---------- uçan ilmekler ----------
   var flyers = [];
   var flyerGeo = null;
-  function spawnFlyer(st, target) {
-    if (!flyerGeo) flyerGeo = new THREE.CapsuleGeometry(0.28, 1.1, 3, 8);
-    var g = new THREE.Group();
-    [-0.35, 0.35].forEach(function (off, i) {
-      var leg = new THREE.Mesh(flyerGeo, mat(level.colors[st.color]));
-      leg.position.x = off;
-      leg.rotation.z = i === 0 ? 0.42 : -0.42;
-      g.add(leg);
-    });
+  function spawnFlyerFrom(x0, y0, colorIdx, target) {
+    var g = makeStitchGroup(colorIdx, 1);
     root.add(g);
-    flyers.push({
-      g: g, t: 0, target: target,
-      x0: boardX + st.c * cell + cell / 2,
-      y0: boardY + st.r * cell + cell / 2
-    });
+    flyers.push({ g: g, t: 0, target: target, x0: x0, y0: y0 });
+  }
+  function spawnFlyer(st, target) {
+    spawnFlyerFrom(boardX + st.c * cell + cell / 2, boardY + st.r * cell + cell / 2, st.color, target);
   }
   function updateFlyers(dt) {
     for (var i = flyers.length - 1; i >= 0; i--) {
@@ -494,6 +510,64 @@
       f.g.rotation.z = t * 7;
       var s = (1 - t * 0.5) * 0.9;
       f.g.scale.setScalar(s);
+    }
+  }
+
+  // ---------- bekleme yuvası ilmekleri ----------
+  function makeStitchGroup(colorIdx, scale) {
+    var g = new THREE.Group();
+    if (!flyerGeo) flyerGeo = new THREE.CapsuleGeometry(0.28, 1.1, 3, 8);
+    [-0.35, 0.35].forEach(function (off, i) {
+      var leg = new THREE.Mesh(flyerGeo, mat(level.colors[colorIdx]));
+      leg.position.x = off;
+      leg.rotation.z = i === 0 ? 0.42 : -0.42;
+      leg.castShadow = true;
+      g.add(leg);
+    });
+    g.scale.setScalar(scale || 1);
+    return g;
+  }
+
+  function addPending(st) {
+    var slot = pending.length;
+    var g = makeStitchGroup(st.color, 1.4);
+    g.position.set(wx(PEND_X[slot]), wy(PEND_Y), 1.2);
+    root.add(g);
+    pending.push({ color: st.color, g: g });
+    relayoutPending();
+  }
+
+  function relayoutPending() {
+    pending.forEach(function (p, i) {
+      p.g.position.set(wx(PEND_X[i]), wy(PEND_Y), 1.2);
+    });
+  }
+
+  // bekleyen ilmekler, raydaki uygun makaraya sırayla akar
+  function drainPending(dt) {
+    pendingDrainT += dt * 1000;
+    if (pendingDrainT < 90) return;
+    pendingDrainT = 0;
+    for (var i = 0; i < pending.length; i++) {
+      var p = pending[i];
+      var spool = null;
+      for (var c2 = 0; c2 < convoy.length; c2++) {
+        if (convoy[c2].color === p.color && convoy[c2].remaining > 0 && convoy[c2].state === 'riding') {
+          spool = convoy[c2];
+          break;
+        }
+      }
+      if (!spool) continue;
+      var fromX = PEND_X[i];
+      pending.splice(i, 1);
+      root.remove(p.g);
+      relayoutPending();
+      spool.remaining--;
+      stats.stitches++;
+      sfx.stitch();
+      spawnFlyerFrom(fromX, PEND_Y, p.color, spool);
+      if (spool.remaining === 0) completeSpool(spool);
+      break; // her seferde bir ilmek
     }
   }
 
@@ -576,6 +650,7 @@
 
   // ---------- seviye yaşam döngüsü ----------
   function loadLevel(n) {
+    loadGen++;
     levelNum = Math.max(1, n);
     localStorage.setItem('yarnloop.level', String(levelNum));
     level = YL.generateLevel(levelNum);
@@ -599,12 +674,16 @@
         var sp = makeSpoolEntity(b.color, b.cap, TRAY_X[ci], TRAY_Y + ri * 8, ri === 0 ? 0.8 : 0.55);
         sp.z = 1.2 - ri * 0.5;
         sp.idx = b.idx;
-        sp.link = b.link;
+        sp.linkNext = b.linkNext;
         return sp;
       });
     });
     combo = 0;
     heartbeatT = 0;
+    pending.forEach(function (p) { root.remove(p.g); });
+    pending = [];
+    pendingDrainT = 0;
+    flowStarted = false;
     convoy = [];
     activeSpool = null;
     railT = 0.62;
@@ -673,7 +752,7 @@
       success ? (stars() === 3 ? 'Mükemmel!' : 'Tebrikler!') : 'Tıkandın!';
     document.getElementById('overlay-sub').textContent = success
       ? 'Seviye ' + levelNum + ' tamamlandı — ' + level.name + ' söküldü'
-      : 'Ray doldu (5/5), sıradaki renge uyan makara yok';
+      : 'Bekleme yuvaları taştı! Doğru renk makarayı zamanında raya bindir';
     document.getElementById('btn-next').style.display = success ? '' : 'none';
     document.getElementById('overlay').classList.remove('hidden');
   }
@@ -699,8 +778,10 @@
     sp.state = 'boarding';
     maxDockUsed = Math.max(maxDockUsed, convoy.length);
     var p = railPoint(railT - CONVOY_GAP * (convoy.length - 1));
+    var gen = loadGen;
     cancelTweens(sp);
     setTimeout(function () {
+      if (gen !== loadGen) return;
       tween(sp, { x: p.x, y: p.y, scale: 0.92, z: 2.2 }, 0.45, easeOutBack, function () {
         sp.state = 'riding';
       });
@@ -711,21 +792,19 @@
     if (won || failed) return false;
     var colArr = trayCols[colIdx];
     if (!colArr.length) return false;
-    var front = colArr[0];
-    // bağlı çift: öndekinin eşi hemen arkasında — ikisi birden biner
-    var isPair = front.link !== undefined && colArr[1] && colArr[1].idx === front.link;
-    var needSlots = isPair ? 2 : 1;
-    if (convoy.length + needSlots > MAX_TRACK) {
-      front.shake = 1;
+    // zincir: öndeki makaraya bağlı olanlar da onunla birlikte biner
+    var chainLen = 1;
+    while (colArr[chainLen - 1] && colArr[chainLen] &&
+           colArr[chainLen - 1].linkNext === colArr[chainLen].idx) chainLen++;
+    if (convoy.length + chainLen > MAX_TRACK) {
+      colArr[0].shake = 1;
       sfx.blocked();
       return false;
     }
-    colArr.shift();
-    boardSpool(front, 0);
-    if (isPair) {
-      var partner = colArr.shift();
-      boardSpool(partner, 0.14);
+    for (var k = 0; k < chainLen; k++) {
+      boardSpool(colArr.shift(), k * 0.14);
     }
+    flowStarted = true;
     sfx.dockIn();
     updateTrackChip();
     colArr.forEach(function (b, ri) {
@@ -826,67 +905,76 @@
     if (shakeT > 0) shakeT = Math.max(0, shakeT - dt * 2);
 
     if (!won && !failed) {
-      if (pos >= level.stream.length) {
+      if (pos >= level.stream.length && pending.length === 0) {
         won = true;
         sfx.win();
         spawnConfetti();
         stats.stars += stars();
         stats.maxLevel = Math.max(stats.maxLevel, levelNum + 1);
         saveStats();
-        setTimeout(function () { showOverlay(true); }, 800);
-      } else {
+        var gen = loadGen;
+        setTimeout(function () { if (gen === loadGen) showOverlay(true); }, 800);
+      } else if (flowStarted) {
+        // KESİNTİSİZ AKIŞ: ip hep sökülür. Sıradaki ilmeğin renginde
+        // makara raydaysa ona sarılır; yoksa bekleme yuvasına düşer.
+        // Yuvalar taşarsa yanarsın.
         var spool = matchingTrackSpool();
         activeSpool = spool && spool.state === 'riding' ? spool : null;
-        if (spool) {
-          stalledSince = 0;
-          if (activeSpool) {
-            stitchTimer += dt * 1000;
-            // sona yaklaştıkça / kombo sürdükçe hızlanır
-            var ms = STITCH_MS / speedMult();
-            while (stitchTimer >= ms && pos < level.stream.length) {
-              var st = level.stream[pos];
-              if (st.color !== activeSpool.color || activeSpool.remaining === 0) break;
-              stitchTimer -= ms;
-              alive[st.r][st.c] = false;
-              hideStitch(st.c, st.r);
-              activeSpool.remaining--;
-              pos++;
-              combo++;
-              stats.stitches++;
-              updateProgress();
-              sfx.stitch();
-              spawnFlyer(st, activeSpool);
-              railT += 0.011;
-              ms = STITCH_MS / speedMult();
-              if (activeSpool.remaining === 0) {
-                completeSpool(activeSpool);
-                break;
-              }
-              // renk değişince sarmayı raydaki diğer makara ANINDA devralır
-              if (pos < level.stream.length && level.stream[pos].color !== activeSpool.color) break;
+
+        stitchTimer += dt * 1000;
+        var ms = STITCH_MS / speedMult();
+        while (stitchTimer >= ms && pos < level.stream.length && !failed) {
+          var st = level.stream[pos];
+          var winder = null;
+          for (var ci = 0; ci < convoy.length; ci++) {
+            if (convoy[ci].color === st.color && convoy[ci].remaining > 0 && convoy[ci].state === 'riding') {
+              winder = convoy[ci];
+              break;
             }
           }
-        } else {
-          stitchTimer = 0;
-          combo = 0;
-          if (convoy.length >= MAX_TRACK) {
-            // yanma geri sayımı: ray dolu + akış yok → 3 sn kalp atışı
-            stalledSince += dt;
-            heartbeatT += dt;
-            if (heartbeatT > 0.7) {
-              heartbeatT = 0;
-              beep(110, 90, 0.12, 'sine', 0.25);
-              shakeT = Math.max(shakeT, 0.25);
-            }
-            if (stalledSince > 3) {
+          stitchTimer -= ms;
+          if (winder) {
+            alive[st.r][st.c] = false;
+            hideStitch(st.c, st.r);
+            winder.remaining--;
+            pos++;
+            combo++;
+            stats.stitches++;
+            sfx.stitch();
+            spawnFlyer(st, winder);
+            railT += 0.011;
+            if (winder.remaining === 0) completeSpool(winder);
+          } else {
+            // renk rayda yok → ilmek bekleme yuvasına
+            if (pending.length >= MAX_PENDING) {
               failed = true;
               shakeT = 1;
               sfx.fail();
               saveStats();
-              setTimeout(function () { showOverlay(false); }, 500);
+              var fgen = loadGen;
+              setTimeout(function () { if (fgen === loadGen) showOverlay(false); }, 500);
+              break;
             }
-          } else {
-            stalledSince = 0;
+            alive[st.r][st.c] = false;
+            hideStitch(st.c, st.r);
+            pos++;
+            combo = 0;
+            addPending(st);
+            beep(260, 180, 0.1, 'sine', 0.12);
+          }
+          updateProgress();
+          ms = STITCH_MS / speedMult();
+        }
+
+        drainPending(dt);
+
+        // tehlike: yuvalar dolmaya yakınken kalp atışı
+        if (pending.length >= MAX_PENDING - 1) {
+          heartbeatT += dt;
+          if (heartbeatT > 0.6) {
+            heartbeatT = 0;
+            beep(110, 90, 0.12, 'sine', 0.25);
+            shakeT = Math.max(shakeT, 0.2);
           }
         }
       }
@@ -904,23 +992,30 @@
       sp.y += (p.y + bob - sp.y) * Math.min(dt * 8, 1);
     });
 
-    // ipucu: gereken tepsi makarası nabız atar
-    var need = neededColor();
-    var wantHint = !matchingTrackSpool() && !won && !failed;
-    trayCols.forEach(function (colArr) {
-      if (colArr.length && colArr[0].state === 'tray') {
-        var front = colArr[0];
-        var isHint = wantHint && front.color === need;
-        front.scale = isHint ? 0.8 + Math.sin(now * 6) * 0.06 : 0.8;
-      }
-    });
+    // ipucu: yakında gerekecek (sıradaki + bekleyen) renklerin tepsi
+    // makarası, rayda karşılığı yoksa nabız atar
+    if (!won && !failed) {
+      var hintColors = {};
+      var nc = neededColor();
+      if (nc >= 0) hintColors[nc] = true;
+      pending.forEach(function (p) { hintColors[p.color] = true; });
+      convoy.forEach(function (sp) {
+        if (sp.remaining > 0) delete hintColors[sp.color];
+      });
+      trayCols.forEach(function (colArr) {
+        if (colArr.length && colArr[0].state === 'tray') {
+          var front = colArr[0];
+          front.scale = hintColors[front.color] ? 0.8 + Math.sin(now * 6) * 0.06 : 0.8;
+        }
+      });
+    }
 
     allSpools.forEach(syncSpool);
     updateStrand();
     updateLinks();
     updateFlyers(dt);
     updateParticles(dt);
-    updateTrackChip(convoy.length >= MAX_TRACK && stalledSince > 0.2);
+    updateTrackChip(pending.length >= MAX_PENDING - 1);
     updateSpeedChip();
 
     // sarsıntı
@@ -941,6 +1036,8 @@
     getLevel: function () { return level; },
     getPos: function () { return pos; },
     getConvoy: function () { return convoy; },
+    getPending: function () { return pending; },
+    isFlowStarted: function () { return flowStarted; },
     getTray: function () { return trayCols; },
     neededColor: neededColor,
     tapTray: tapTray,
