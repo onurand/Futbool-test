@@ -396,6 +396,22 @@
     ] }
   ];
 
+  function hexLum(hex) {
+    var nHex = parseInt(hex.slice(1), 16);
+    return (((nHex >> 16) & 255) * 0.299 + ((nHex >> 8) & 255) * 0.587 + (nHex & 255) * 0.114) / 255;
+  }
+
+  function hexShade(hex, amt) {
+    var nHex = parseInt(hex.slice(1), 16);
+    var r = (nHex >> 16) & 255, g = (nHex >> 8) & 255, b = nHex & 255;
+    var target = amt > 0 ? 255 : 0;
+    var t = Math.abs(amt);
+    r = Math.round(r + (target - r) * t);
+    g = Math.round(g + (target - g) * t);
+    b = Math.round(b + (target - b) * t);
+    return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+  }
+
   function mulberry32(seed) {
     var a = seed >>> 0;
     return function () {
@@ -411,7 +427,7 @@
 
     // Aynı desen için farklı tohumlarla dener; çözülemeyen tohumu atlar.
     // Son çare: renk başına tek makara + zincirsiz (kanıtlanabilir çözüm).
-    for (var attempt = 0; attempt < 12; attempt++) {
+    for (var attempt = 0; attempt < 20; attempt++) {
       var level = buildAttempt(n, pattern, attempt, false);
       if (solveCheck(level)) return level;
     }
@@ -444,6 +460,43 @@
     var grid = pattern.rows.map(function (row) {
       return row.split('').map(function (ch) { return roles.indexOf(ch); });
     });
+
+    // renk zenginleştirme: seviye ilerledikçe hedef renk sayısı artar
+    // (1-3: 2-3 renk, ~10: 4, 15+: 6). Az renkli desenlerde en kalabalık
+    // rollerin satır şeritleri aynı tonun açık/koyu varyantlarına bölünür —
+    // resim tanınır kalır, oyunda ayrı renk (ayrı makara) sayılır.
+    var targetColors = Math.min(2 + Math.floor((n - 1) / 3), safeMode ? 4 : 6);
+    var bandH = 2 + (attempt % 2);
+    var bandPhase = attempt;
+    if (colors.length < targetColors) {
+      var counts = {};
+      grid.forEach(function (row) {
+        row.forEach(function (ci) { counts[ci] = (counts[ci] || 0) + 1; });
+      });
+      var order = Object.keys(counts).map(Number).sort(function (a, b) {
+        return counts[b] - counts[a];
+      });
+      for (var oi = 0; oi < order.length && colors.length < targetColors; oi++) {
+        var role = order[oi];
+        if (counts[role] < 24) continue; // küçük bölgeleri bölme
+        var k = Math.min(3, 1 + (targetColors - colors.length));
+        // açık renklerde koyu, koyu renklerde açık varyant: resim seçilir kalır
+        var lum = hexLum(colors[role]);
+        var amts = lum > 0.72 ? [-0.24, -0.42] : (lum < 0.3 ? [0.32, 0.55] : [0.3, -0.28]);
+        var variantIdx = [];
+        for (var v = 1; v < k; v++) {
+          variantIdx.push(colors.length);
+          colors.push(hexShade(colors[role], amts[v - 1]));
+        }
+        for (var r2 = 0; r2 < rows; r2++) {
+          for (var c3 = 0; c3 < cols; c3++) {
+            if (grid[r2][c3] !== role) continue;
+            var band = (Math.floor(r2 / bandH) + bandPhase) % k;
+            if (band > 0) grid[r2][c3] = variantIdx[band - 1];
+          }
+        }
+      }
+    }
 
     var stream = [];
     for (var r = rows - 1; r >= 0; r--) {
