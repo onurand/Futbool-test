@@ -20,7 +20,7 @@
   var H = 700;
   var BOARD = { x: 64, y: 100, w: 292, h: 330 };
   var RAIL_PAD = 26;
-  var TRAY_Y = 634;
+  var TRAY_Y = 648;
   var TRAY_X = [66, 138, 210, 282, 354];
   var STITCH_MS = 150;
   var MAX_TRACK = 5;      // rayda aynı anda en fazla makara
@@ -29,15 +29,17 @@
   var PENDING_DROP_MS = 850; // eşleşmeyen ilmeğin yuvaya düşme aralığı
   var PEND_X = [66, 138, 210, 282, 354];
   var PEND_Y = 494;
-  var TRAY_TOP_Y = 574;   // tepsi üst sırası (görünür, dokunulamaz)
+  var TRAY_TOP_Y = 564;   // ön sıra (üstte, raya yakın)
   var MAX_LEVEL = 100;
 
   // tepsi dizilimi: 0 = ön (alt) sıra dokunulabilir, 1 = üst sıra görünür,
   // 2+ üst sıranın arkasında küçülerek bekler
+  // ön sıra ÜSTTE (raya yakın), yedek sıra altta; öndeki alınınca
+  // alttaki yukarı çıkar. 2+ indeksliler alt sıranın arkasında bekler.
   function trayPosFor(ri) {
-    if (ri === 0) return { y: TRAY_Y, scale: 0.8, z: 1.2 };
-    if (ri === 1) return { y: TRAY_TOP_Y, scale: 0.72, z: 1.0 };
-    return { y: TRAY_TOP_Y - (ri - 1) * 7, scale: 0.5, z: 0.7 - (ri - 2) * 0.2 };
+    if (ri === 0) return { y: TRAY_TOP_Y, scale: 0.76, z: 1.2 };
+    if (ri === 1) return { y: TRAY_Y, scale: 0.66, z: 1.0 };
+    return { y: TRAY_Y + (ri - 1) * 5, scale: 0.46, z: 0.7 - (ri - 2) * 0.2 };
   }
 
   var WS = 0.1; // dünya ölçeği: 1 mantık birimi = 0.1 dünya birimi
@@ -282,10 +284,10 @@
 
     // tepsi paneli (ahşap, iki sıra makara alır)
     var tray = new THREE.Mesh(
-      new THREE.BoxGeometry((W - 48) * WS, 15.6, 1.2),
+      new THREE.BoxGeometry((W - 48) * WS, 16.2, 1.2),
       mat('#8a5a36', { roughness: 0.8 })
     );
-    tray.position.set(0, wy((TRAY_TOP_Y + TRAY_Y) / 2 + 4), -0.7);
+    tray.position.set(0, wy((TRAY_TOP_Y + TRAY_Y) / 2 + 2), -0.7);
     tray.receiveShadow = true;
     staticGroup.add(tray);
   }
@@ -553,13 +555,41 @@
     return g;
   }
 
+  // yuvada BİTMEMİŞ MİNİ MAKARA birikir: aynı renkten düşen ilmekler
+  // o makaraya sarılır (en çok MINI_CAP); dolunca aynı renk için yeni
+  // yuva gerekir. canPlacePending false iken düşme bekler → yanma sayacı.
+  var MINI_CAP = 8;
+
+  function canPlacePending(color) {
+    for (var i = 0; i < pending.length; i++) {
+      if (pending[i].color === color && pending[i].count < MINI_CAP) return true;
+    }
+    return pending.length < MAX_PENDING;
+  }
+
   function addPending(st) {
-    var slot = pending.length;
-    var g = makeStitchGroup(st.color, 1.4);
-    g.position.set(wx(PEND_X[slot]), wy(PEND_Y), 1.2);
+    for (var i = 0; i < pending.length; i++) {
+      if (pending[i].color === st.color && pending[i].count < MINI_CAP) {
+        pending[i].count++;
+        updatePendingBadge(pending[i]);
+        return true;
+      }
+    }
+    if (pending.length >= MAX_PENDING) return false;
+    var g = buildSpoolMesh(level.colors[st.color]);
+    g.scale.setScalar(0.62);
+    var badge = new THREE.Sprite(badgeSprite(1, level.colors[st.color]));
+    badge.scale.set(2.4, 2.4, 1);
+    badge.position.y = 2.6;
+    g.add(badge);
     root.add(g);
-    pending.push({ color: st.color, g: g });
+    pending.push({ color: st.color, count: 1, g: g, badge: badge, spin: Math.random() * 6 });
     relayoutPending();
+    return true;
+  }
+
+  function updatePendingBadge(p) {
+    p.badge.material = badgeSprite(p.count, level.colors[p.color]);
   }
 
   function relayoutPending() {
@@ -583,18 +613,23 @@
         }
       }
       if (!spool) continue;
-      var fromX = PEND_X[i];
-      pending.splice(i, 1);
-      root.remove(p.g);
-      relayoutPending();
+      p.count--;
       spool.remaining--;
       stats.stitches++;
       sfx.stitch();
-      spawnFlyerFrom(fromX, PEND_Y, p.color, spool);
+      spawnFlyerFrom(PEND_X[i], PEND_Y, p.color, spool);
+      if (p.count <= 0) {
+        root.remove(p.g);
+        pending.splice(i, 1);
+        relayoutPending();
+      } else {
+        updatePendingBadge(p);
+      }
       if (spool.remaining === 0) completeSpool(spool);
       break; // her seferde bir ilmek
     }
   }
+
 
   // ---------- parçacıklar (ışıltı + konfeti havuzu) ----------
   var particles = [];
@@ -863,7 +898,7 @@
     ensureAudio();
     var p = canvasPoint(ev);
     if (p.y > TRAY_TOP_Y - 44) {
-      var row = p.y > (TRAY_TOP_Y + TRAY_Y) / 2 ? 0 : 1;
+      var row = p.y > (TRAY_TOP_Y + TRAY_Y) / 2 ? 1 : 0;
       for (var i = 0; i < 5; i++) {
         if (Math.abs(p.x - TRAY_X[i]) < 34) { tapTray(i, row); return; }
       }
@@ -1010,7 +1045,7 @@
           stitchTimer = 0;
           combo = 0;
           dropTimer += dt * 1000;
-          if (dropTimer >= PENDING_DROP_MS && pending.length < MAX_PENDING) {
+          if (dropTimer >= PENDING_DROP_MS && canPlacePending(stNow.color)) {
             dropTimer = 0;
             alive[stNow.r][stNow.c] = false;
             hideStitch(stNow.c, stNow.r);
@@ -1023,8 +1058,10 @@
 
         drainPending(dt);
 
-        // yanma: 5 yuva da doluysa kısa müsamaha, kurtarılamazsa yandın
-        if (pending.length >= MAX_PENDING) {
+        // yanma: sıradaki ilmek yuvalara yerleşemiyorsa (5 yuva dolu ve
+        // rengin mini makarası da dolu) kısa müsamaha, kurtarılamazsa yandın
+        var blockedDrop = !winder && !incoming && !canPlacePending(stNow.color);
+        if (blockedDrop) {
           burnT += dt;
           heartbeatT += dt;
           if (heartbeatT > 0.35) {
@@ -1085,6 +1122,9 @@
       });
     }
 
+    pending.forEach(function (p) {
+      p.g.rotation.y = now * 0.9 + p.spin;
+    });
     allSpools.forEach(syncSpool);
     updateStrand();
     updateLinks();
