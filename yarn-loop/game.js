@@ -599,6 +599,65 @@
     });
   }
 
+  // yuvadaki mini makara dokununca RAYA geri biner: biriktirdiği ilmek
+  // sayısı kapasitesi olur; denge için aynı renkteki tepsi (yoksa ray)
+  // makaralarından o kadar kapasite düşülür — toplam korunur.
+  function boardPendingSpool(pi) {
+    if (won || failed) return false;
+    var p = pending[pi];
+    if (!p) return false;
+    if (convoy.length >= MAX_TRACK) {
+      sfx.blocked();
+      shakeT = Math.max(shakeT, 0.2);
+      return false;
+    }
+    var need = p.count;
+    // 1) tepsiden düş (önce zincirsizler)
+    for (var pass = 0; pass < 2 && need > 0; pass++) {
+      for (var t = 0; t < 5 && need > 0; t++) {
+        var colArr = trayCols[t];
+        for (var ri = colArr.length - 1; ri >= 0 && need > 0; ri--) {
+          var it = colArr[ri];
+          if (it.color !== p.color || it.remaining <= 0) continue;
+          var chained = it.linkNext !== undefined ||
+            (ri > 0 && colArr[ri - 1].linkNext === it.idx);
+          if (pass === 0 && chained) continue;
+          var take = Math.min(it.remaining, need);
+          it.remaining -= take;
+          it.cap = it.remaining;
+          need -= take;
+          if (it.remaining <= 0) {
+            removeSpoolEntity(it);
+            colArr.splice(ri, 1);
+            colArr.forEach(function (b, i2) {
+              var tp = trayPosFor(i2);
+              cancelTweens(b);
+              tween(b, { y: tp.y, scale: tp.scale, z: tp.z }, 0.3, easeOutBack);
+            });
+          }
+        }
+      }
+    }
+    // 2) kalan raydakilerden düş
+    for (var ci = 0; ci < convoy.length && need > 0; ci++) {
+      var sp2 = convoy[ci];
+      if (sp2.color !== p.color || sp2.remaining <= 0) continue;
+      var take2 = Math.min(sp2.remaining, need);
+      sp2.remaining -= take2;
+      need -= take2;
+      if (sp2.remaining === 0) completeSpool(sp2);
+    }
+    // mini makara normal makara olarak raya biner
+    var sp = makeSpoolEntity(p.color, p.count, PEND_X[pi], PEND_Y, 0.7);
+    root.remove(p.g);
+    pending.splice(pi, 1);
+    relayoutPending();
+    boardSpool(sp, 0);
+    sfx.dockIn();
+    updateTrackChip();
+    return true;
+  }
+
   // bekleyen ilmekler, raydaki uygun makaraya sırayla akar
   function drainPending(dt) {
     pendingDrainT += dt * 1000;
@@ -897,6 +956,12 @@
   canvas.addEventListener('pointerdown', function (ev) {
     ensureAudio();
     var p = canvasPoint(ev);
+    // yuvadaki mini makara: dokununca raya geri biner
+    if (p.y > PEND_Y - 32 && p.y < PEND_Y + 36) {
+      for (var pj = 0; pj < pending.length; pj++) {
+        if (Math.abs(p.x - PEND_X[pj]) < 32) { boardPendingSpool(pj); return; }
+      }
+    }
     // yalnızca ön (üst) sıra seçilebilir
     if (p.y > TRAY_TOP_Y - 44 && p.y < (TRAY_TOP_Y + TRAY_Y) / 2 + 8) {
       for (var i = 0; i < 5; i++) {
@@ -1159,6 +1224,7 @@
     getLevel: function () { return level; },
     getPos: function () { return pos; },
     getConvoy: function () { return convoy; },
+    boardPendingSpool: boardPendingSpool,
     getPending: function () { return pending; },
     isFlowStarted: function () { return flowStarted; },
     getTray: function () { return trayCols; },
