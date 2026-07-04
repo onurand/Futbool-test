@@ -82,11 +82,12 @@
     localStorage.setItem('yarnloop.stats', JSON.stringify(stats));
   }
 
-  // sona yaklaştıkça ve kombo sürdükçe sarma hızlanır
+  // hız sabittir; yalnızca oyunun SONUNA doğru (son makaralar) artar
   function speedMult() {
     if (!level) return 1;
     var progress = pos / level.stream.length;
-    return Math.min(1 + progress * 1.7 + Math.min(combo * 0.012, 0.5), 3.2);
+    if (progress < 0.65) return 1;
+    return 1 + (progress - 0.65) / 0.35 * 1.5; // sonda 2.5x'e dek
   }
   var levelNum = parseInt(localStorage.getItem('yarnloop.level') || '1', 10);
   if (!(levelNum >= 1)) levelNum = 1;
@@ -870,15 +871,14 @@
 
   // row 0 = alt sıra, row 1 = üst sıra; ikisi de seçilebilir.
   // Zincir üyesine dokunulursa zincir BÜTÜN olarak biner.
-  function tapTray(colIdx, row) {
+  function tapTray(colIdx) {
     if (won || failed) return false;
     var colArr = trayCols[colIdx];
-    row = row || 0;
-    if (colArr.length <= row) return false;
-    var start = chainStartFor(colArr, row);
+    if (!colArr.length) return false;
+    var start = 0;
     var len = chainLenAt(colArr, start);
     if (convoy.length + len > MAX_TRACK) {
-      colArr[row].shake = 1;
+      colArr[0].shake = 1;
       sfx.blocked();
       return false;
     }
@@ -897,10 +897,10 @@
   canvas.addEventListener('pointerdown', function (ev) {
     ensureAudio();
     var p = canvasPoint(ev);
-    if (p.y > TRAY_TOP_Y - 44) {
-      var row = p.y > (TRAY_TOP_Y + TRAY_Y) / 2 ? 1 : 0;
+    // yalnızca ön (üst) sıra seçilebilir
+    if (p.y > TRAY_TOP_Y - 44 && p.y < (TRAY_TOP_Y + TRAY_Y) / 2 + 8) {
       for (var i = 0; i < 5; i++) {
-        if (Math.abs(p.x - TRAY_X[i]) < 34) { tapTray(i, row); return; }
+        if (Math.abs(p.x - TRAY_X[i]) < 34) { tapTray(i); return; }
       }
     }
   });
@@ -1013,7 +1013,6 @@
         }
 
         if (winder) {
-          dropTimer = 0;
           stitchTimer += dt * 1000;
           var ms = STITCH_MS / speedMult();
           while (stitchTimer >= ms && pos < level.stream.length) {
@@ -1039,20 +1038,23 @@
         } else if (incoming) {
           // eş renk makara raya binmek üzere: ip onu bekler
           stitchTimer = 0;
-          dropTimer = 0;
         } else {
-          // renk rayda yok: ilmekler yavaş tempoda yuvaya düşer
-          stitchTimer = 0;
+          // renk rayda yok: ip AYNI tempoda akar, ilmek mini makaraya düşer
           combo = 0;
-          dropTimer += dt * 1000;
-          if (dropTimer >= PENDING_DROP_MS && canPlacePending(stNow.color)) {
-            dropTimer = 0;
-            alive[stNow.r][stNow.c] = false;
-            hideStitch(stNow.c, stNow.r);
-            pos++;
-            addPending(stNow);
-            beep(260, 180, 0.1, 'sine', 0.12);
-            updateProgress();
+          stitchTimer += dt * 1000;
+          var ms2 = STITCH_MS / speedMult();
+          if (stitchTimer >= ms2) {
+            if (canPlacePending(stNow.color)) {
+              stitchTimer -= ms2;
+              alive[stNow.r][stNow.c] = false;
+              hideStitch(stNow.c, stNow.r);
+              pos++;
+              addPending(stNow);
+              beep(260, 180, 0.1, 'sine', 0.12);
+              updateProgress();
+            } else {
+              stitchTimer = ms2; // yerleşemiyor: ip bekler, yanma sayacı işler
+            }
           }
         }
 
@@ -1113,15 +1115,21 @@
         if (sp.remaining > 0) delete hintColors[sp.color];
       });
       trayCols.forEach(function (colArr) {
-        for (var ri = 0; ri < Math.min(colArr.length, 2); ri++) {
-          if (colArr[ri].state !== 'tray') continue;
-          var base = trayPosFor(ri).scale;
-          colArr[ri].scale = hintColors[colArr[ri].color]
+        if (colArr.length && colArr[0].state === 'tray') {
+          var base = trayPosFor(0).scale;
+          colArr[0].scale = hintColors[colArr[0].color]
             ? base + Math.sin(now * 6) * 0.06 : base;
         }
       });
     }
 
+    for (var pi = pending.length - 1; pi >= 0; pi--) {
+      if (pending[pi].count <= 0) { // 0 olan makara anında silinir
+        root.remove(pending[pi].g);
+        pending.splice(pi, 1);
+        relayoutPending();
+      }
+    }
     pending.forEach(function (p) {
       p.g.rotation.y = now * 0.9 + p.spin;
     });
