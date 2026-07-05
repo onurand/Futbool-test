@@ -461,11 +461,27 @@
       return row.split('').map(function (ch) { return roles.indexOf(ch); });
     });
 
+    // kenar dolgusu: resmi arka planla çevrele — ilmek sayısı artar,
+    // makara sayısı 10-12'ye çıkar ve tepsi iki sıra dolu olur
+    var padded = [];
+    var padRow = [];
+    for (var pc = 0; pc < cols + 2; pc++) padRow.push(0);
+    padded.push(padRow.slice());
+    grid.forEach(function (row) {
+      padded.push([0].concat(row).concat([0]));
+    });
+    padded.push(padRow.slice());
+    grid = padded;
+    rows += 2;
+    cols += 2;
+
     // renk zenginleştirme: seviye ilerledikçe hedef renk sayısı artar
     // (1-3: 2-3 renk, ~10: 4, 15+: 6). Az renkli desenlerde en kalabalık
     // rollerin satır şeritleri aynı tonun açık/koyu varyantlarına bölünür —
     // resim tanınır kalır, oyunda ayrı renk (ayrı makara) sayılır.
-    var targetColors = Math.min(2 + Math.floor((n - 1) / 3), safeMode ? 4 : 6);
+    // ilk denemeler tam hedefle; çözüm bulunamadıkça renk hedefi kademeli iner
+    var maxColors = safeMode ? 4 : (attempt >= 14 ? 4 : (attempt >= 8 ? 5 : 6));
+    var targetColors = Math.min(2 + Math.floor((n - 1) / 3), maxColors);
     var bandH = 2 + (attempt % 2);
     var bandPhase = attempt;
     if (colors.length < targetColors) {
@@ -518,9 +534,11 @@
         for (var s2 = i; s2 < stream.length; s2++) {
           if (stream[s2].color === col) remainingTotal++;
         }
-        // gerçek oyundaki gibi büyük kapasiteler: 15-35 arası, 5'in katı
+        // gerçek oyundaki gibi büyük kapasiteler: 15-35 arası, 5'in katı;
+        // çözüm bulunamayan denemelerde biraz küçülür (10-20)
+        var capUnits = attempt >= 8 ? (2 + Math.floor(rnd() * 3)) : (3 + Math.floor(rnd() * 5));
         var cap = safeMode ? remainingTotal
-          : Math.min(remainingTotal, (3 + Math.floor(rnd() * 5)) * 5);
+          : Math.min(remainingTotal, capUnits * 5);
         spools.push({ color: col, cap: cap });
         open[col] = cap;
       }
