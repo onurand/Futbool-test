@@ -24,9 +24,9 @@
   var TRAY_X = [66, 138, 210, 282, 354];
   var STITCH_MS = 150;
   var MAX_TRACK = 5;      // rayda aynı anda en fazla makara
-  var CONVOY_GAP = 0.085; // ray parametresinde makaralar arası boşluk
-  var MAX_PENDING = 5;    // bekleme yuvası sayısı
-  var PENDING_DROP_MS = 850; // eşleşmeyen ilmeğin yuvaya düşme aralığı
+  var MAX_PENDING = 5;    // bekleme kutusu sayısı
+  var ENTRY_T = 0.635;    // makaranın raya girdiği nokta (fiyonk)
+  var LAP_SEC = 13;       // bir tam turun süresi (saniye)
   var PEND_X = [66, 138, 210, 282, 354];
   var PEND_Y = 494;
   var TRAY_TOP_Y = 564;   // ön sıra (üstte, raya yakın)
@@ -57,7 +57,7 @@
   var railT = 0.62;
   var stitchTimer = 0;
   var won = false, failed = false;
-  var maxDockUsed = 0;
+  var maxBoxUsed = 0;
   var stalledSince = 0;
   var shakeT = 0;
   var now = 0;
@@ -556,140 +556,51 @@
     return g;
   }
 
-  // yuvada BİTMEMİŞ MİNİ MAKARA birikir: aynı renkten düşen ilmekler
-  // o makaraya sarılır (en çok MINI_CAP); dolunca aynı renk için yeni
-  // yuva gerekir. canPlacePending false iken düşme bekler → yanma sayacı.
-  var MINI_CAP = 8;
-
-  function canPlacePending(color) {
-    for (var i = 0; i < pending.length; i++) {
-      if (pending[i].color === color && pending[i].count < MINI_CAP) return true;
+  // turu dolmadan biten makara KUTUYA iner; kutu kalmadıysa yanarsın
+  function moveToBox(sp) {
+    convoy = convoy.filter(function (s) { return s !== sp; });
+    if (activeSpool === sp) activeSpool = null;
+    updateTrackChip();
+    if (pending.length >= MAX_PENDING) {
+      failed = true;
+      shakeT = 1;
+      sfx.fail();
+      saveStats();
+      var fgen = loadGen;
+      setTimeout(function () { if (fgen === loadGen) showOverlay(false); }, 500);
+      return;
     }
-    return pending.length < MAX_PENDING;
+    sp.state = 'boxed';
+    pending.push(sp);
+    maxBoxUsed = Math.max(maxBoxUsed, pending.length);
+    beep(300, 200, 0.15, 'sine', 0.16);
+    relayoutBoxes();
   }
 
-  function addPending(st) {
-    for (var i = 0; i < pending.length; i++) {
-      if (pending[i].color === st.color && pending[i].count < MINI_CAP) {
-        pending[i].count++;
-        updatePendingBadge(pending[i]);
-        return true;
-      }
-    }
-    if (pending.length >= MAX_PENDING) return false;
-    var g = buildSpoolMesh(level.colors[st.color]);
-    g.scale.setScalar(0.62);
-    var badge = new THREE.Sprite(badgeSprite(1, level.colors[st.color]));
-    badge.scale.set(2.4, 2.4, 1);
-    badge.position.y = 2.6;
-    g.add(badge);
-    root.add(g);
-    pending.push({ color: st.color, count: 1, g: g, badge: badge, spin: Math.random() * 6 });
-    relayoutPending();
-    return true;
-  }
-
-  function updatePendingBadge(p) {
-    p.badge.material = badgeSprite(p.count, level.colors[p.color]);
-  }
-
-  function relayoutPending() {
-    pending.forEach(function (p, i) {
-      p.g.position.set(wx(PEND_X[i]), wy(PEND_Y), 1.2);
+  function relayoutBoxes() {
+    pending.forEach(function (sp, i) {
+      cancelTweens(sp);
+      tween(sp, { x: PEND_X[i], y: PEND_Y, scale: 0.62, z: 1.2, rot: 0 }, 0.35, easeOutCubic);
     });
   }
 
-  // yuvadaki mini makara dokununca RAYA geri biner: biriktirdiği ilmek
-  // sayısı kapasitesi olur; denge için aynı renkteki tepsi (yoksa ray)
-  // makaralarından o kadar kapasite düşülür — toplam korunur.
+  // kutudaki makara dokununca tekrar TURA girer
   function boardPendingSpool(pi) {
     if (won || failed) return false;
-    var p = pending[pi];
-    if (!p) return false;
+    var sp = pending[pi];
+    if (!sp) return false;
     if (convoy.length >= MAX_TRACK) {
       sfx.blocked();
-      shakeT = Math.max(shakeT, 0.2);
+      sp.shake = 1;
       return false;
     }
-    var need = p.count;
-    // 1) tepsiden düş (önce zincirsizler)
-    for (var pass = 0; pass < 2 && need > 0; pass++) {
-      for (var t = 0; t < 5 && need > 0; t++) {
-        var colArr = trayCols[t];
-        for (var ri = colArr.length - 1; ri >= 0 && need > 0; ri--) {
-          var it = colArr[ri];
-          if (it.color !== p.color || it.remaining <= 0) continue;
-          var chained = it.linkNext !== undefined ||
-            (ri > 0 && colArr[ri - 1].linkNext === it.idx);
-          if (pass === 0 && chained) continue;
-          var take = Math.min(it.remaining, need);
-          it.remaining -= take;
-          it.cap = it.remaining;
-          need -= take;
-          if (it.remaining <= 0) {
-            removeSpoolEntity(it);
-            colArr.splice(ri, 1);
-            colArr.forEach(function (b, i2) {
-              var tp = trayPosFor(i2);
-              cancelTweens(b);
-              tween(b, { y: tp.y, scale: tp.scale, z: tp.z }, 0.3, easeOutBack);
-            });
-          }
-        }
-      }
-    }
-    // 2) kalan raydakilerden düş
-    for (var ci = 0; ci < convoy.length && need > 0; ci++) {
-      var sp2 = convoy[ci];
-      if (sp2.color !== p.color || sp2.remaining <= 0) continue;
-      var take2 = Math.min(sp2.remaining, need);
-      sp2.remaining -= take2;
-      need -= take2;
-      if (sp2.remaining === 0) completeSpool(sp2);
-    }
-    // mini makara normal makara olarak raya biner
-    var sp = makeSpoolEntity(p.color, p.count, PEND_X[pi], PEND_Y, 0.7);
-    root.remove(p.g);
     pending.splice(pi, 1);
-    relayoutPending();
+    relayoutBoxes();
     boardSpool(sp, 0);
     sfx.dockIn();
     updateTrackChip();
     return true;
   }
-
-  // bekleyen ilmekler, raydaki uygun makaraya sırayla akar
-  function drainPending(dt) {
-    pendingDrainT += dt * 1000;
-    if (pendingDrainT < 70) return;
-    pendingDrainT = 0;
-    for (var i = 0; i < pending.length; i++) {
-      var p = pending[i];
-      var spool = null;
-      for (var c2 = 0; c2 < convoy.length; c2++) {
-        if (convoy[c2].color === p.color && convoy[c2].remaining > 0 && convoy[c2].state === 'riding') {
-          spool = convoy[c2];
-          break;
-        }
-      }
-      if (!spool) continue;
-      p.count--;
-      spool.remaining--;
-      stats.stitches++;
-      sfx.stitch();
-      spawnFlyerFrom(PEND_X[i], PEND_Y, p.color, spool);
-      if (p.count <= 0) {
-        root.remove(p.g);
-        pending.splice(i, 1);
-        relayoutPending();
-      } else {
-        updatePendingBadge(p);
-      }
-      if (spool.remaining === 0) completeSpool(spool);
-      break; // her seferde bir ilmek
-    }
-  }
-
 
   // ---------- parçacıklar (ışıltı + konfeti havuzu) ----------
   var particles = [];
@@ -803,8 +714,7 @@
     heartbeatT = 0;
     dropTimer = 0;
     burnT = 0;
-    pending.forEach(function (p) { root.remove(p.g); });
-    pending = [];
+    pending = []; // kutu makaraları allSpools temizliğiyle kalkar
     pendingDrainT = 0;
     flowStarted = false;
     convoy = [];
@@ -812,7 +722,7 @@
     railT = 0.62;
     stitchTimer = 0;
     won = false; failed = false;
-    maxDockUsed = 0;
+    maxBoxUsed = 0;
     stalledSince = 0;
     shakeT = 0;
 
@@ -856,7 +766,7 @@
 
   // ---------- overlay & hud ----------
   function stars() {
-    return maxDockUsed <= 3 ? 3 : (maxDockUsed === 4 ? 2 : 1);
+    return maxBoxUsed <= 1 ? 3 : (maxBoxUsed <= 3 ? 2 : 1);
   }
   function showOverlay(success) {
     var starEl = document.getElementById('overlay-stars');
@@ -879,7 +789,7 @@
       ? '100 seviyenin tamamını söktün — gerçek bir örgü ustasısın!'
       : (success
         ? 'Seviye ' + levelNum + ' tamamlandı — ' + level.name + ' söküldü'
-        : 'Bekleme yuvaları taştı! Doğru renk makarayı zamanında raya bindir');
+        : 'Kutular doldu! Makarayı bir turda doldur, kutudakini raya geri sok');
     document.getElementById('btn-next').style.display = (success && !finished) ? '' : 'none';
     document.getElementById('overlay').classList.remove('hidden');
   }
@@ -903,8 +813,8 @@
   function boardSpool(sp, delay) {
     convoy.push(sp);
     sp.state = 'boarding';
-    maxDockUsed = Math.max(maxDockUsed, convoy.length);
-    var p = railPoint(railT - CONVOY_GAP * (convoy.length - 1));
+    sp.lapT = 0; // fiyonktan girer, bir tam tur atar
+    var p = railPoint(ENTRY_T);
     var gen = loadGen;
     cancelTweens(sp);
     setTimeout(function () {
@@ -1062,20 +972,18 @@
         var gen = loadGen;
         setTimeout(function () { if (gen === loadGen) showOverlay(true); }, 800);
       } else if (flowStarted) {
-        // KESİNTİSİZ AKIŞ: eşleşen makara raydaysa ip hızla sarılır.
-        // Eşleşme yoksa ip DURMAZ ama ilmekler yuvaya YAVAŞ tempoda düşer
-        // (oyuncuya tepki süresi); 5 yuva dolu kalırsa yanarsın.
-        var spool = matchingTrackSpool();
-        activeSpool = spool && spool.state === 'riding' ? spool : null;
-
+        // İp, sıradaki ilmeğin renginde RAYDA makara varsa ona sarılır;
+        // yoksa bekler. Baskı tur sisteminden gelir: turu dolmadan biten
+        // makara kutuya iner, kutular taşarsa yanarsın.
         var stNow = level.stream[pos];
-        var winder = null, incoming = null;
+        var winder = null;
         for (var ci = 0; ci < convoy.length; ci++) {
-          if (convoy[ci].color === stNow.color && convoy[ci].remaining > 0) {
-            if (convoy[ci].state === 'riding') { winder = convoy[ci]; break; }
-            incoming = convoy[ci];
+          var csp = convoy[ci];
+          if (csp.color === stNow.color && csp.remaining > 0 && csp.state === 'riding') {
+            if (!winder || csp.lapT > winder.lapT) winder = csp; // turu bitmeye yakın öncelikli
           }
         }
+        activeSpool = winder;
 
         if (winder) {
           stitchTimer += dt * 1000;
@@ -1092,7 +1000,6 @@
             stats.stitches++;
             sfx.stitch();
             spawnFlyer(st, winder);
-            railT += 0.011;
             updateProgress();
             ms = STITCH_MS / speedMult();
             if (winder.remaining === 0) {
@@ -1100,74 +1007,39 @@
               break;
             }
           }
-        } else if (incoming) {
-          // eş renk makara raya binmek üzere: ip onu bekler
-          stitchTimer = 0;
         } else {
-          // renk rayda yok: ip AYNI tempoda akar, ilmek mini makaraya düşer
+          stitchTimer = 0;
           combo = 0;
-          stitchTimer += dt * 1000;
-          var ms2 = STITCH_MS / speedMult();
-          if (stitchTimer >= ms2) {
-            if (canPlacePending(stNow.color)) {
-              stitchTimer -= ms2;
-              alive[stNow.r][stNow.c] = false;
-              hideStitch(stNow.c, stNow.r);
-              pos++;
-              addPending(stNow);
-              beep(260, 180, 0.1, 'sine', 0.12);
-              updateProgress();
-            } else {
-              stitchTimer = ms2; // yerleşemiyor: ip bekler, yanma sayacı işler
-            }
-          }
         }
 
-        drainPending(dt);
-
-        // yanma: sıradaki ilmek yuvalara yerleşemiyorsa (5 yuva dolu ve
-        // rengin mini makarası da dolu) kısa müsamaha, kurtarılamazsa yandın
-        var blockedDrop = !winder && !incoming && !canPlacePending(stNow.color);
-        if (blockedDrop) {
-          burnT += dt;
+        // kutular dolmaya yakınken kalp atışı
+        if (pending.length >= MAX_PENDING - 1) {
           heartbeatT += dt;
-          if (heartbeatT > 0.35) {
+          if (heartbeatT > 0.5) {
             heartbeatT = 0;
-            beep(110, 90, 0.12, 'sine', 0.28);
-            shakeT = Math.max(shakeT, 0.25);
-          }
-          if (burnT > 1.2 && !failed) {
-            failed = true;
-            shakeT = 1;
-            sfx.fail();
-            saveStats();
-            var fgen = loadGen;
-            setTimeout(function () { if (fgen === loadGen) showOverlay(false); }, 500);
-          }
-        } else {
-          burnT = 0;
-          if (pending.length >= MAX_PENDING - 1) {
-            heartbeatT += dt;
-            if (heartbeatT > 0.7) {
-              heartbeatT = 0;
-              beep(110, 90, 0.12, 'sine', 0.22);
-            }
+            beep(110, 90, 0.12, 'sine', 0.26);
+            shakeT = Math.max(shakeT, 0.15);
           }
         }
       }
     }
 
-    // konvoy bandı sürekli akar (sarma ilerledikçe ekstra hızlanır)
-    if (!won && !failed && convoy.length) railT += dt * 0.012;
-
-    // konvoy: raydaki tüm makaralar birlikte ilerler
-    convoy.forEach(function (sp, i) {
-      if (sp.state !== 'riding') return;
-      var p = railPoint(railT - CONVOY_GAP * i);
-      var bob = sp === activeSpool ? Math.sin(now * 9) * 2 : 0;
-      sp.x += (p.x - sp.x) * Math.min(dt * 8, 1);
-      sp.y += (p.y + bob - sp.y) * Math.min(dt * 8, 1);
-    });
+    // her makara rayda kendi turunu atar; tur dolduğunda kutuya iner
+    if (!won && !failed) {
+      for (var bi = convoy.length - 1; bi >= 0; bi--) {
+        var bsp = convoy[bi];
+        if (bsp.state !== 'riding') continue;
+        bsp.lapT += dt / LAP_SEC * speedMult();
+        if (bsp.lapT >= 1) {
+          moveToBox(bsp);
+          continue;
+        }
+        var bp = railPoint(ENTRY_T + bsp.lapT);
+        var bob = bsp === activeSpool ? Math.sin(now * 9) * 2 : 0;
+        bsp.x += (bp.x - bsp.x) * Math.min(dt * 10, 1);
+        bsp.y += (bp.y + bob - bsp.y) * Math.min(dt * 10, 1);
+      }
+    }
 
     // ipucu: yakında gerekecek (sıradaki + bekleyen) renklerin tepsi
     // makarası, rayda karşılığı yoksa nabız atar
@@ -1188,16 +1060,6 @@
       });
     }
 
-    for (var pi = pending.length - 1; pi >= 0; pi--) {
-      if (pending[pi].count <= 0) { // 0 olan makara anında silinir
-        root.remove(pending[pi].g);
-        pending.splice(pi, 1);
-        relayoutPending();
-      }
-    }
-    pending.forEach(function (p) {
-      p.g.rotation.y = now * 0.9 + p.spin;
-    });
     allSpools.forEach(syncSpool);
     updateStrand();
     updateLinks();

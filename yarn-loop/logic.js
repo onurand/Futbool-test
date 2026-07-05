@@ -509,7 +509,6 @@
 
     // kapasiteler sınırlı tutulur ki her seviyede tepsi makaralarla dolsun;
     // safeMode: renk başına tek makara (kanıtlanabilir çözüm)
-    var capMax = Math.max(6, Math.ceil(stream.length / 12));
     var open = {};
     var spools = [];
     for (i = 0; i < stream.length; i++) {
@@ -519,8 +518,9 @@
         for (var s2 = i; s2 < stream.length; s2++) {
           if (stream[s2].color === col) remainingTotal++;
         }
+        // gerçek oyundaki gibi büyük kapasiteler: 15-35 arası, 5'in katı
         var cap = safeMode ? remainingTotal
-          : Math.min(remainingTotal, 4 + Math.floor(rnd() * capMax));
+          : Math.min(remainingTotal, (3 + Math.floor(rnd() * 5)) * 5);
         spools.push({ color: col, cap: cap });
         open[col] = cap;
       }
