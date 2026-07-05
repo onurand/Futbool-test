@@ -134,7 +134,7 @@
       '..BB......BB..',
       '..............'
     ] },
-    { name: 'elmas', colors: { '.': '#fff3e0', 'B': '#35c7f4', 'A': '#8fd6f7' }, rows: [
+    { name: 'elmas', colors: { '.': '#b591f2', 'B': '#35c7f4', 'A': '#fff9ee' }, rows: [
       '..............',
       '....BBBBBB....',
       '...BABBBBAB...',
@@ -184,7 +184,7 @@
       '.....CC.CC....',
       '..............'
     ] },
-    { name: 'dondurma', colors: { '.': '#fff3e0', 'B': '#ff7ad9', 'D': '#fff9ee', 'A': '#e0a35c' }, rows: [
+    { name: 'dondurma', colors: { '.': '#fff3e0', 'B': '#ff7ad9', 'D': '#8fd6f7', 'A': '#e0a35c' }, rows: [
       '..............',
       '.....BBBB.....',
       '....BBBBBB....',
@@ -196,7 +196,7 @@
       '......AA......',
       '..............'
     ] },
-    { name: 'kuş', colors: { '.': '#8fd6f7', 'A': '#35c7f4', 'B': '#5a4a52', 'D': '#ff9f2e' }, rows: [
+    { name: 'kuş', colors: { '.': '#8fd6f7', 'A': '#5f7cff', 'B': '#5a4a52', 'D': '#ff9f2e' }, rows: [
       '..............',
       '.....AAAA.....',
       '....AABAAA....',
@@ -272,7 +272,7 @@
       '......BB......',
       '..............'
     ] },
-    { name: 'mantar', colors: { '.': '#fff3e0', 'B': '#ff5677', 'A': '#fff9ee', 'D': '#f0d9b8' }, rows: [
+    { name: 'mantar', colors: { '.': '#5ecb84', 'B': '#ff5677', 'A': '#fff9ee', 'D': '#e0a35c' }, rows: [
       '..............',
       '....BBBBBB....',
       '..BBAABBAABB..',
@@ -368,7 +368,7 @@
       '..BBBBBBBBBB..',
       '..............'
     ] },
-    { name: 'yumak', colors: { '.': '#fff3e0', 'A': '#ff5677', 'B': '#ff92ac' }, rows: [
+    { name: 'yumak', colors: { '.': '#fff3e0', 'A': '#ff5677', 'B': '#c168ff' }, rows: [
       '..............',
       '....AAAAAA....',
       '..AABBBBBBAA..',
@@ -395,6 +395,14 @@
       '..............'
     ] }
   ];
+
+  function hexDist(a, b) {
+    var pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+    var dr = ((pa >> 16) & 255) - ((pb >> 16) & 255);
+    var dg = ((pa >> 8) & 255) - ((pb >> 8) & 255);
+    var db2 = (pa & 255) - (pb & 255);
+    return Math.sqrt(dr * dr + dg * dg + db2 * db2);
+  }
 
   function hexLum(hex) {
     var nHex = parseInt(hex.slice(1), 16);
@@ -461,6 +469,25 @@
       return row.split('').map(function (ch) { return roles.indexOf(ch); });
     });
 
+    // aynı hex'i paylaşan roller TEK oyun rengine birleştirilir — yoksa
+    // görsel olarak özdeş ama oyunda farklı sayılan renkler oluşur
+    // (makara yanından geçer ama ilmeği toplayamaz)
+    var remap = [], seenHex = {}, dedup = [];
+    for (i = 0; i < colors.length; i++) {
+      var hkey = String(colors[i]).toLowerCase();
+      if (seenHex[hkey] !== undefined) {
+        remap[i] = seenHex[hkey];
+      } else {
+        seenHex[hkey] = dedup.length;
+        remap[i] = dedup.length;
+        dedup.push(colors[i]);
+      }
+    }
+    colors = dedup;
+    grid = grid.map(function (row) {
+      return row.map(function (ci) { return remap[ci]; });
+    });
+
     // kenar dolgusu: resmi arka planla çevrele — ilmek sayısı artar,
     // makara sayısı 10-12'ye çıkar ve tepsi iki sıra dolu olur
     var padded = [];
@@ -496,13 +523,34 @@
         var role = order[oi];
         if (counts[role] < 24) continue; // küçük bölgeleri bölme
         var k = Math.min(3, 1 + (targetColors - colors.length));
-        // açık renklerde koyu, koyu renklerde açık varyant: resim seçilir kalır
+        // varyantlar paletteki KULLANILMAYAN, net ayırt edilebilir renklerden
+        // seçilir (ton benzerliği oyuncuyu yanıltıyordu); palet biterse
+        // parlaklığa göre belirgin gölge kullanılır
+        var used = {};
+        colors.forEach(function (ch2) { used[String(ch2).toLowerCase()] = 1; });
+        // aday, seviyedeki HER renkten yeterince uzak olmalı (karışmasın)
+        var pool = [];
+        for (var pi2 = 0; pi2 < PALETTE.length; pi2++) {
+          var cand = PALETTE[pi2];
+          if (used[cand.toLowerCase()]) continue;
+          var okDist = true;
+          for (var ci2 = 0; ci2 < colors.length; ci2++) {
+            if (hexDist(cand, colors[ci2]) < 70) { okDist = false; break; }
+          }
+          if (okDist) pool.push(cand);
+        }
+        for (var sh = pool.length - 1; sh > 0; sh--) {
+          var sj = Math.floor(rnd() * (sh + 1));
+          var stmp = pool[sh]; pool[sh] = pool[sj]; pool[sj] = stmp;
+        }
         var lum = hexLum(colors[role]);
-        var amts = lum > 0.72 ? [-0.24, -0.42] : (lum < 0.3 ? [0.32, 0.55] : [0.3, -0.28]);
+        var amts = lum > 0.72 ? [-0.3, -0.5] : (lum < 0.3 ? [0.38, 0.6] : [0.34, -0.32]);
         var variantIdx = [];
         for (var v = 1; v < k; v++) {
           variantIdx.push(colors.length);
-          colors.push(hexShade(colors[role], amts[v - 1]));
+          var nc2 = pool.length ? pool.shift() : hexShade(colors[role], amts[v - 1]);
+          used[String(nc2).toLowerCase()] = 1;
+          colors.push(nc2);
         }
         for (var r2 = 0; r2 < rows; r2++) {
           for (var c3 = 0; c3 < cols; c3++) {

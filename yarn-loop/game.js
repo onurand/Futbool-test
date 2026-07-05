@@ -460,8 +460,26 @@
       strandMesh.geometry.dispose();
       strandMesh = null;
     }
-    if (!activeSpool || pos >= level.stream.length) return;
-    if (activeSpool.state !== 'riding') return;
+    if (pos >= level.stream.length) return;
+    if (!activeSpool || activeSpool.state !== 'riding') {
+      // sarım yok: ip ucu resimden sarkar, GEREKEN RENGİ gösterir
+      if (!flowStarted) return;
+      var st0 = level.stream[pos];
+      var ex = boardX + st0.c * cell + cell / 2;
+      var ey = boardY + st0.r * cell + cell / 2;
+      var wob0 = Math.sin(now * 5) * 0.8;
+      var dangler = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(wx(ex), wy(ey), 0.7),
+        new THREE.Vector3(wx(ex) + 0.6 + wob0, wy(ey) - 2.4, 1.8),
+        new THREE.Vector3(wx(ex) + wob0 * 1.6, wy(ey) - 4.6, 2.0)
+      ]);
+      strandMesh = new THREE.Mesh(
+        new THREE.TubeGeometry(dangler, 12, 0.18, 6, false),
+        mat(level.colors[st0.color], { roughness: 0.45 })
+      );
+      root.add(strandMesh);
+      return;
+    }
     var st = level.stream[pos];
     var sx = boardX + st.c * cell + cell / 2;
     var sy = boardY + st.r * cell + cell / 2;
@@ -976,6 +994,7 @@
         // yoksa bekler. Baskı tur sisteminden gelir: turu dolmadan biten
         // makara kutuya iner, kutular taşarsa yanarsın.
         var stNow = level.stream[pos];
+        if (!stNow) return; // güvenlik: akış sınır dışına taşmasın
         var winder = null;
         for (var ci = 0; ci < convoy.length; ci++) {
           var csp = convoy[ci];
